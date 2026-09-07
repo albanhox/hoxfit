@@ -194,7 +194,7 @@ nav.tabs button.on{color:var(--accent)}
 .result .k{font-family:var(--display);font-weight:700;font-size:16px;text-align:right}
 .result .k small{display:block;font-family:var(--body);font-weight:400;font-size:11px;color:var(--muted)}
 .conf{display:inline-block;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;padding:2px 6px;border-radius:6px;margin-left:6px;vertical-align:middle;background:var(--surface2);color:var(--muted)}
-.conf.label{background:var(--accent-soft);color:var(--accent)}
+.conf.label,.conf.usda{background:var(--accent-soft);color:var(--accent)}
 .conf.estimate{background:var(--warn-soft);color:var(--warn)}
 .thinking{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:14px;padding:10px 4px}
 .spin{width:18px;height:18px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--accent);animation:spin .8s linear infinite;flex:none}
@@ -263,7 +263,7 @@ nav.tabs button.on{color:var(--accent)}
 (() => {
 'use strict';
 /* ---------- constants & helpers ---------- */
-const LS_KEY = 'hoxfit:v3', LS_AI = 'hoxfit:aikey';
+const LS_KEY = 'hoxfit:v3', LS_AI = 'hoxfit:aikey', LS_USDA = 'hoxfit:usdakey';
 const OFF = 'https://world.openfoodfacts.org';
 const OFF_FIELDS = 'code,product_name,product_name_en,brands,quantity,serving_size,serving_quantity,image_front_small_url,image_front_url,nutriments';
 const MEALS = [['breakfast','Breakfast'],['lunch','Lunch'],['dinner','Dinner'],['snack','Snacks']];
@@ -307,10 +307,10 @@ const GENERIC = [
 ];
 const GENERIC_ITEMS = GENERIC.map(([name,emoji,cal,p,c,f,serving,g]) => ({ name, brand: '', emoji, serving, servingGrams: g, per100: {cal,p,c,f}, cal: r1(cal*g/100), p: r1(p*g/100), c: r1(c*g/100), f: r1(f*g/100), source: 'generic', confidence: 'generic', note: 'USDA-based generic value' }));
 
-const state = { profile: null, foods: {}, days: {}, date: todayStr(), tab: 'today', aiKey: null };
+const state = { profile: null, foods: {}, days: {}, date: todayStr(), tab: 'today', aiKey: null, usdaKey: null };
 
 /* ---------- storage ---------- */
-function load(){ try { const j = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); state.profile = j.profile || null; state.foods = j.foods || {}; state.days = j.days || {}; } catch {} try { state.aiKey = localStorage.getItem(LS_AI) || null; } catch {} }
+function load(){ try { const j = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); state.profile = j.profile || null; state.foods = j.foods || {}; state.days = j.days || {}; } catch {} try { state.aiKey = localStorage.getItem(LS_AI) || null; state.usdaKey = localStorage.getItem(LS_USDA) || null; } catch {} }
 function save(){ try { localStorage.setItem(LS_KEY, JSON.stringify({ profile: state.profile, foods: state.foods, days: state.days, v: 3, savedAt: Date.now() })); } catch (e) { toast('Could not save. Storage may be full or blocked.'); } }
 const persistProfile = () => save(), persistFood = () => save(), persistDay = () => save();
 
@@ -345,7 +345,7 @@ function tileHtml(item, cls='tile'){
   if (item.photo) return `<div class="${cls} photo"><img src="${esc(item.photo)}" alt="" loading="lazy" onerror="this.parentNode.classList.remove('photo');this.replaceWith(document.createTextNode('${esc(item.emoji||'🍽️')}'))"></div>`;
   return `<div class="${cls}">${esc(item.emoji || '🍽️')}</div>`;
 }
-const confLabel = c => ({label:'Label', per100:'Per 100 g', estimate:'Estimate', generic:'Generic', manual:'Manual', photo:'From photo'})[c] || '';
+const confLabel = c => ({label:'Label', per100:'Per 100 g', estimate:'Estimate', generic:'Generic', manual:'Manual', photo:'From photo', usda:'USDA label'})[c] || '';
 
 /* ---------- rendering ---------- */
 function render(){
@@ -550,6 +550,11 @@ function renderGoals(){
     </div>
     <button class="btn primary block" id="savePlan" style="padding:14px">${state.profile ? 'Save changes' : 'Save my plan'}</button>
     <div class="card">
+      <h3>Data sources</h3>
+      <p class="hint">Searches use Open Food Facts first (photos, millions of products). When it is busy or thin, the app also checks the USDA FoodData Central branded database. USDA's shared demo key runs out fast; a personal key is free and instant at <a href="https://api.data.gov/signup/" target="_blank" rel="noopener" style="color:var(--accent)">api.data.gov/signup</a>.</p>
+      <div class="inline"><div class="field"><label>USDA API key (optional)</label><input id="usdaKey" type="password" autocomplete="off" placeholder="paste key" value="${esc(state.usdaKey||'')}"></div><button class="btn" id="saveUsda">${state.usdaKey ? 'Update' : 'Save key'}</button>${state.usdaKey ? '<button class="btn ghost" id="clearUsda">Remove</button>' : ''}</div>
+    </div>
+    <div class="card">
       <h3>AI assist (optional)</h3>
       <p class="hint">With your own Anthropic API key, you can type a whole meal (“2 eggs, toast with butter, coffee with cream”) or photograph a nutrition label and have it read into numbers. The key stays in this browser only and is never included in exports.</p>
       <div class="inline"><div class="field"><label>Anthropic API key</label><input id="aiKey" type="password" autocomplete="off" placeholder="sk-ant-…" value="${esc(state.aiKey||'')}"></div><button class="btn" id="saveKey">${state.aiKey ? 'Update' : 'Save key'}</button>${state.aiKey ? '<button class="btn ghost" id="clearKey">Remove</button>' : ''}</div>
@@ -593,6 +598,8 @@ function renderGoals(){
     go('today');
   };
   $('#saveKey').onclick = () => { const k = $('#aiKey').value.trim(); if (!k.startsWith('sk-ant-')) return toast('That does not look like an Anthropic key (starts with sk-ant-).'); state.aiKey = k; try { localStorage.setItem(LS_AI, k); } catch {} toast('AI assist is on.'); renderGoals(); };
+  $('#saveUsda').onclick = () => { const k = $('#usdaKey').value.trim(); if (k.length < 20) return toast('That key looks too short.'); state.usdaKey = k; try { localStorage.setItem(LS_USDA, k); } catch {} toast('USDA key saved.'); renderGoals(); };
+  $('#clearUsda')?.addEventListener('click', () => { state.usdaKey = null; try { localStorage.removeItem(LS_USDA); } catch {} toast('Key removed.'); renderGoals(); });
   $('#clearKey')?.addEventListener('click', () => { state.aiKey = null; try { localStorage.removeItem(LS_AI); } catch {} toast('Key removed.'); renderGoals(); });
   $('#exportJson').onclick = () => { const blob = new Blob([JSON.stringify({ profile: state.profile, foods: state.foods, days: state.days, v: 3, exportedAt: new Date().toISOString() }, null, 1)], {type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `hoxfit-backup-${todayStr()}.json`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); toast('Backup downloaded.'); };
   $('#importJson').onchange = async e => {
@@ -636,12 +643,55 @@ function offToItem(p){
     serving: perServ ? (p.serving_size && p.serving_size.trim() ? p.serving_size.trim() : `${sg} g`) : '100 g', servingGrams: perServ ? sg : 100, per100, ...vals, emoji: '🛒', source: 'off', confidence,
     note: perServ ? (p.quantity ? `Package: ${p.quantity}` : '') : 'No serving size on record. Shown per 100 g.' };
 }
+class SrcError extends Error { constructor(src, status, msg){ super(msg || `${src} ${status}`); this.src = src; this.status = status; } }
+async function fetchJson(src, url, signal, retries = 1){
+  for (let i = 0; ; i++) {
+    try {
+      const r = await fetch(url, { signal });
+      if (r.status === 429) throw new SrcError(src, 429);
+      if (r.status >= 500 && i < retries) { await new Promise(res => setTimeout(res, 1500)); continue; }
+      if (!r.ok) throw new SrcError(src, r.status);
+      return await r.json();
+    } catch (e) {
+      if (e.name === 'AbortError' || e instanceof SrcError) throw e;
+      if (i < retries) { await new Promise(res => setTimeout(res, 1200)); continue; } // network error or reset: one retry
+      throw new SrcError(src, 0, e.message);
+    }
+  }
+}
 async function searchOFF(q, signal){
-  const url = `${OFF}/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=14&fields=${OFF_FIELDS}`;
-  const r = await fetch(url, { signal, headers: { 'Accept': 'application/json' } });
-  if (!r.ok) throw new Error('off ' + r.status);
-  const j = await r.json();
+  const j = await fetchJson('off', `${OFF}/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=14&fields=${OFF_FIELDS}`, signal);
   return (j.products || []).map(offToItem).filter(Boolean);
+}
+/* USDA FoodData Central (branded foods). Free key at https://api.data.gov/signup — DEMO_KEY is shared and tightly limited. */
+const titleCase = s => String(s || '').toLowerCase().replace(/(^|[\s(\-/])([a-z])/g, (m, a, b) => a + b.toUpperCase()).replace(/\b(\d+)(Oz|Fl|G|Ml|Lb)\b/g, (m, n, u) => n + ' ' + u.toLowerCase());
+function usdaToItem(f){
+  const N = {}; for (const n of f.foodNutrients || []) { const k = String(n.nutrientNumber || n.nutrientId || ''); const name = (n.nutrientName || '').toLowerCase(); const v = num(n.value); if (v == null) continue;
+    if (k === '208' || k === '1008' || (name === 'energy' && (n.unitName || '').toUpperCase() === 'KCAL')) N.cal = v; else if (k === '203' || k === '1003' || name === 'protein') N.p = v; else if (k === '204' || k === '1004' || name.startsWith('total lipid')) N.f = v; else if (k === '205' || k === '1005' || name.startsWith('carbohydrate')) N.c = v; else if (k === '291' || k === '1079' || name.startsWith('fiber')) N.fiber = v; else if (k === '269' || k === '2000' || k === '1063' || name.includes('sugars')) N.sugar = v; }
+  if (N.cal == null) return null;
+  const per100 = { cal: r1(N.cal), p: r1(N.p), c: r1(N.c), f: r1(N.f), fiber: r1(N.fiber), sugar: r1(N.sugar) };
+  const sg = num(f.servingSize); const unit = (f.servingSizeUnit || 'g').toLowerCase();
+  const house = (f.householdServingFullText || '').trim();
+  const k = sg ? sg / 100 : 1;
+  const vals = sg ? { cal: r1(per100.cal*k), p: r1(per100.p*k), c: r1(per100.c*k), f: r1(per100.f*k), fiber: r1(per100.fiber*k), sugar: r1(per100.sugar*k) } : per100;
+  const brand = titleCase(f.brandName || f.brandOwner || '');
+  return { name: titleCase(f.description), brand, code: f.gtinUpc || null, photo: null, quantity: f.packageWeight || '', emoji: '🏷️',
+    serving: sg ? (house ? `${house} (${r1(sg)} ${unit})` : `${r1(sg)} ${unit}`) : `100 ${unit}`, servingGrams: sg || 100, per100, ...vals, source: 'usda', confidence: sg ? 'usda' : 'per100',
+    note: `USDA FoodData Central${f.brandOwner && f.brandName && f.brandOwner !== f.brandName ? ' · ' + titleCase(f.brandOwner) : ''}` };
+}
+async function searchUSDA(q, signal){
+  const key = state.usdaKey || 'DEMO_KEY';
+  const j = await fetchJson('usda', `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${encodeURIComponent(key)}&query=${encodeURIComponent(q)}&dataType=Branded&pageSize=14`, signal, 0);
+  return (j.foods || []).map(usdaToItem).filter(Boolean);
+}
+function srcErrorText(e){
+  if (!(e instanceof SrcError)) return 'Search failed. Try again in a moment.';
+  const who = e.src === 'usda' ? 'USDA' : 'Open Food Facts';
+  if (e.status === 429) return e.src === 'usda' && !state.usdaKey ? 'The shared USDA demo key is used up for now. Add your own free key under Plan → Data sources.' : `${who} is rate-limiting searches (about 10 a minute). Wait a moment and try again.`;
+  if (e.status >= 500) return `${who} is temporarily down (error ${e.status}). Try again in a minute.`;
+  if (e.status === 403) return e.src === 'usda' ? 'USDA rejected the API key. Check it under Plan → Data sources.' : `${who} refused the request (403).`;
+  if (e.status === 0) return `Could not reach ${who}. Check your connection; if you are on a work Wi-Fi it may block it. Try again or scan the barcode.`;
+  return `${who} returned an error (${e.status}). Try again.`;
 }
 async function lookupBarcode(code, signal){
   const tries = [code]; if (code.length === 12) tries.push('0' + code); if (code.length === 13 && code[0] === '0') tries.push(code.slice(1));
@@ -651,6 +701,7 @@ async function lookupBarcode(code, signal){
     if (!r.ok) throw new Error('off ' + r.status);
     const j = await r.json(); if (j.status === 1 && j.product) { const it = offToItem(j.product); if (it) return it; }
   }
+  try { const hits = await searchUSDA(code, signal); const exact = hits.find(h => h.code && tries.includes(String(h.code).replace(/\D/g, ''))) || hits.find(h => h.code && tries.some(t => String(h.code).replace(/\D/g, '').endsWith(t.replace(/^0+/, '')))); if (exact) return exact; } catch {}
   return null;
 }
 function searchGeneric(q){ const t = q.toLowerCase().split(/\s+/).filter(Boolean); if (!t.length) return []; return GENERIC_ITEMS.filter(g => t.every(w => g.name.toLowerCase().includes(w))).slice(0, 5); }
@@ -701,7 +752,7 @@ function renderSheet(){
   if (sheet.kind !== 'add') return;
   const d = sheet.data, q = d.q.trim().toLowerCase();
   const mine = q ? Object.values(state.foods).filter(f => (f.name + ' ' + (f.brand||'')).toLowerCase().includes(q)).slice(0, 6) : Object.values(state.foods).sort((a,b) => (b.lastUsed||0) - (a.lastUsed||0)).slice(0, 5);
-  const resultRow = (r, attr) => `<button class="result" ${attr}>${tileHtml(r)}<div class="t"><b>${esc(r.name)}${r.confidence && r.confidence !== 'label' ? `<span class="conf ${esc(r.confidence)}">${confLabel(r.confidence)}</span>` : ''}</b><span>${esc(r.brand ? r.brand + ' · ' : '')}${esc(r.serving)}${r.quantity && r.source==='off' ? ` · ${esc(r.quantity)}` : ''}</span>${r.note && r.source !== 'off' ? `<em>${esc(r.note)}</em>` : ''}</div><div class="k num">${fmtN(r.cal)}<small>P ${r0(r.p)} · C ${r0(r.c)} · F ${r0(r.f)}</small></div></button>`;
+  const resultRow = (r, attr) => `<button class="result" ${attr}>${tileHtml(r)}<div class="t"><b>${esc(r.name)}${r.confidence && r.confidence !== 'label' ? `<span class="conf ${esc(r.confidence)}">${confLabel(r.confidence)}</span>` : ''}</b><span>${esc(r.brand ? r.brand + ' · ' : '')}${esc(r.serving)}${r.quantity && (r.source==='off' || r.source==='usda') ? ` · ${esc(r.quantity)}` : ''}</span>${r.note && r.source !== 'off' && r.source !== 'usda' ? `<em>${esc(r.note)}</em>` : ''}</div><div class="k num">${fmtN(r.cal)}<small>P ${r0(r.p)} · C ${r0(r.c)} · F ${r0(r.f)}</small></div></button>`;
   const body = mountSheet(`Add to ${MEAL_NAME[d.meal]}`, `
     <div class="searchbar"><input id="q" placeholder="Product, brand, or a whole meal…" value="${esc(d.q)}" autocomplete="off" enterkeyhint="search"><button class="btn primary" id="search" ${d.status ? 'disabled' : ''}>Search</button></div>
     <div class="tools">
@@ -713,7 +764,7 @@ function renderSheet(){
     ${d.error ? `<div class="err">${esc(d.error)}</div>` : ''}
     ${mine.length && (q || !d.results) ? `<div class="subh">${q ? 'From My Foods' : 'Recent'}</div>${mine.map(f => resultRow(f, `data-mine="${f.id}"`)).join('')}` : ''}
     ${d.generic.length ? `<div class="subh">Generic foods</div>${d.generic.map((r,i) => resultRow(r, `data-gen="${i}"`)).join('')}` : ''}
-    ${d.results ? `<div class="subh">${d.results.length ? (d.kind === 'meal' ? 'Broken down — add each item' : d.kind === 'ai' ? 'AI results — check before saving' : 'Products with photos — pick the exact one') : 'No products found'}</div>
+    ${d.results ? `<div class="subh">${d.results.length ? (d.kind === 'meal' ? 'Broken down — add each item' : d.kind === 'ai' ? 'AI results — check before saving' : 'Products — pick the exact one') : 'No products found'}</div>
       ${d.results.map((r, i) => resultRow(r, `data-res="${i}"`)).join('')}
       ${!d.results.length ? `<div class="note">Try fewer words (brand + flavor works best), scan the barcode, ${state.aiKey ? 'or tap Ask AI for a best estimate.' : 'or enter the label by hand.'}</div>` : `<div class="note">Not the exact one? Add the flavor or size and search again, or scan the barcode. Tick “Save to My Foods” on the one you approve and it’s one tap next time.</div>`}` : ''}
     <button class="link" id="manual">Enter nutrition by hand →</button>`);
@@ -737,9 +788,18 @@ async function doSearch(){
   if (q.length < 2) return toast('Type a product or brand first.');
   sheet.ctl?.abort(); const ctl = new AbortController(); sheet.ctl = ctl;
   d.error = null; d.results = null; d.kind = null; d.generic = searchGeneric(q); d.status = 'Searching Open Food Facts…'; renderSheet();
-  try { const items = await searchOFF(q, ctl.signal); if (sheet.ctl !== ctl) return; d.results = items; d.kind = 'off'; }
-  catch (e) { if (sheet.ctl !== ctl || e.name === 'AbortError') return; d.error = 'Open Food Facts did not answer. Check your connection and try again, or scan the barcode.'; }
-  finally { if (sheet.ctl === ctl) { d.status = null; sheet.ctl = null; if (sheet.open && sheet.kind === 'add') renderSheet(); } }
+  let items = [], offErr = null;
+  try { items = await searchOFF(q, ctl.signal); } catch (e) { if (sheet.ctl !== ctl || e.name === 'AbortError') return; offErr = e; }
+  if (sheet.ctl !== ctl) return;
+  if (items.length < 3) { // thin or failed: add USDA branded foods
+    d.status = offErr ? 'Open Food Facts is busy, trying USDA…' : 'Checking USDA too…'; renderSheet();
+    try { const u = await searchUSDA(q, ctl.signal); if (sheet.ctl !== ctl) return; const seen = new Set(items.map(i => i.code)); items = items.concat(u.filter(x => !x.code || !seen.has(x.code))); }
+    catch (e) { if (sheet.ctl !== ctl || e.name === 'AbortError') return; if (offErr) d.error = srcErrorText(offErr) + ' ' + srcErrorText(e); }
+  }
+  if (sheet.ctl !== ctl) return;
+  d.results = items; d.kind = 'off';
+  if (offErr && items.length) d.error = null; else if (offErr && !d.error) d.error = srcErrorText(offErr);
+  if (sheet.ctl === ctl) { d.status = null; sheet.ctl = null; if (sheet.open && sheet.kind === 'add') renderSheet(); }
 }
 async function doAI(file){
   const d = sheet.data, q = d.q.trim();
