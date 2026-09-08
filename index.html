@@ -352,6 +352,14 @@ nav.tabs button.on{color:var(--accent);background:var(--accent-soft)}
 .idea .items{font-size:13px;color:var(--muted)}
 .idea .why{font-size:12.5px;color:var(--accent)}
 .idea .m{font-size:12px;color:var(--muted)}
+/* amounts */
+.amount{display:grid;grid-template-columns:1fr 118px;gap:8px;align-items:stretch}
+.amount .stepper{height:48px}
+.amount select{height:48px;background:var(--bg);border:1px solid var(--line);border-radius:13px;padding:0 30px 0 12px;font-size:15px;font-weight:600;-webkit-appearance:none;appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 16px) 50%,calc(100% - 11px) 50%;background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+.quick{display:flex;gap:6px;flex-wrap:wrap}
+.quick button{font-size:12.5px;padding:7px 11px;border-radius:999px;background:var(--surface2);font-weight:600;color:var(--muted)}
+.quick button.on{background:var(--accent-soft);color:var(--accent)}
+.eq{font-size:12.5px;color:var(--muted);text-align:right;margin-top:-6px}
 /* photos */
 .pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .pcell{position:relative;aspect-ratio:3/4;border-radius:14px;overflow:hidden;background:var(--surface2);border:1px solid var(--line);padding:0}
@@ -437,7 +445,9 @@ const GENERIC = [
  ['Coffee, black','☕',1,0.1,0,0,'1 cup',240],['Coffee with cream and sugar','☕',30,0.3,4.6,1.2,'1 cup',250],['Orange juice','🍊',45,0.7,10.4,0.2,'1 cup',248],['Beer, regular','🍺',43,0.5,3.6,0,'12 oz',356],['Wine, red','🍷',85,0.1,2.6,0,'5 oz',147],['Protein shake, whey with water','🥤',120,25,3,1.5,'1 scoop (30 g) + water',330],
  ['Pizza, cheese','🍕',266,11,33,10,'1 slice (1/8 of 14 in)',107],['Cheeseburger, fast food','🍔',263,13.5,25.4,12.1,'1 burger',119],['Chicken burrito bowl, restaurant','🥗',175,12.4,16.8,6,'1 bowl',380],['Sushi roll, salmon avocado','🍣',150,6,25,3.5,'1 roll (8 pieces)',200],
 ];
-const GENERIC_ITEMS = GENERIC.map(([name,emoji,cal,p,c,f,serving,g]) => ({ name, brand: '', emoji, serving, servingGrams: g, per100: {cal,p,c,f}, cal: r1(cal*g/100), p: r1(p*g/100), c: r1(c*g/100), f: r1(f*g/100), source: 'generic', confidence: 'generic', note: 'USDA-based generic value' }));
+const DENSITY = [['honey',1.42],['maple syrup',1.32],['olive oil',0.91],['peanut butter',1.09],['milk',1.03],['orange juice',1.04],['coffee',1.0],['sugar, white',0.85],['ketchup',1.14],['mayonnaise',0.91],['soy sauce',1.1],['ranch',0.98],['salsa',1.0],['hummus',1.05],['cream cheese',1.0],['butter',0.91],['greek yogurt',1.03],['cottage cheese',1.0],['oatmeal, dry',0.4],['protein shake',1.0],['beer',1.01],['wine',0.99]];
+const densityFor = name => { const n = String(name || '').toLowerCase(); const hit = DENSITY.find(([k]) => n.includes(k)); return hit ? hit[1] : null; };
+const GENERIC_ITEMS = GENERIC.map(([name,emoji,cal,p,c,f,serving,g]) => ({ name, brand: '', emoji, serving, servingGrams: g, per100: {cal,p,c,f}, density: densityFor(name), cal: r1(cal*g/100), p: r1(p*g/100), c: r1(c*g/100), f: r1(f*g/100), source: 'generic', confidence: 'generic', note: 'USDA-based generic value' }));
 
 const state = { profile: null, foods: {}, days: {}, date: todayStr(), tab: 'today', aiKey: null, usdaKey: null, theme: 'system', ringPrev: null, gym: { templates: {}, plan: {} }, photos: [], gymDate: todayStr(), gymCal: false, gemKey: null, gemModel: null, aiProvider: null };
 const EXERCISES = [['Walking',3.5,'🚶'],['Running',9.8,'🏃'],['Cycling',7.5,'🚴'],['Lifting',6,'🏋️'],['HIIT',8,'🔥'],['Swimming',7,'🏊'],['Hiking',6,'🥾'],['Sports',6.5,'🏀'],['Yoga',2.5,'🧘'],['Other',5,'⚡']];
@@ -851,7 +861,7 @@ function offToItem(p){
   if (!perServ && !per100) return null;
   const vals = perServ || per100;
   return { name, brand, code: p.code, photo: p.image_front_small_url || p.image_front_url || null, photoLarge: p.image_front_url || null, quantity: p.quantity || '',
-    serving: perServ ? (p.serving_size && p.serving_size.trim() ? p.serving_size.trim() : `${sg} g`) : '100 g', servingGrams: perServ ? sg : 100, per100, ...vals, emoji: '🛒', source: 'off', confidence,
+    serving: perServ ? (p.serving_size && p.serving_size.trim() ? p.serving_size.trim() : `${sg} g`) : '100 g', servingGrams: perServ ? sg : 100, per100, ...vals, emoji: '🛒', source: 'off', confidence, density: /ml|fl\.? ?oz|litre|liter|\bl\b/i.test(p.serving_size || p.quantity || '') ? 1.0 : densityFor(name),
     note: perServ ? (p.quantity ? `Package: ${p.quantity}` : '') : 'No serving size on record. Shown per 100 g.' };
 }
 class SrcError extends Error { constructor(src, status, msg){ super(msg || `${src} ${status}`); this.src = src; this.status = status; } }
@@ -887,7 +897,7 @@ function usdaToItem(f){
   const vals = sg ? { cal: r1(per100.cal*k), p: r1(per100.p*k), c: r1(per100.c*k), f: r1(per100.f*k), fiber: r1(per100.fiber*k), sugar: r1(per100.sugar*k) } : per100;
   const brand = titleCase(f.brandName || f.brandOwner || '');
   return { name: titleCase(f.description), brand, code: f.gtinUpc || null, photo: null, quantity: f.packageWeight || '', emoji: '🏷️',
-    serving: sg ? (house ? `${house} (${r1(sg)} ${unit})` : `${r1(sg)} ${unit}`) : `100 ${unit}`, servingGrams: sg || 100, per100, ...vals, source: 'usda', confidence: sg ? 'usda' : 'per100',
+    serving: sg ? (house ? `${house} (${r1(sg)} ${unit})` : `${r1(sg)} ${unit}`) : `100 ${unit}`, servingGrams: sg || 100, per100, ...vals, source: 'usda', confidence: sg ? 'usda' : 'per100', density: unit === 'ml' ? 1.0 : densityFor(f.description),
     note: `USDA FoodData Central${f.brandOwner && f.brandName && f.brandOwner !== f.brandName ? ' · ' + titleCase(f.brandOwner) : ''}` };
 }
 async function searchUSDA(q, signal){
@@ -922,13 +932,14 @@ function aiPrompt(q, hasImage){
 ${hasImage ? `The user photographed a food product${q ? ` and typed: "${q}"` : ''}. Read the Nutrition Facts label and product name from the image. If the label is readable, use its exact per-serving values and set confidence "label".` : `The user typed: "${q}"`}
 
 Reply with ONLY a JSON object of this shape (no prose):
-{"kind":"product"|"meal","items":[{"name":"Zero Sugar Vanilla Greek Yogurt","brand":"Chobani","serving":"1 cup (150 g)","servingGrams":150,"cal":60,"p":12,"c":5,"f":0,"fiber":0,"sugar":0,"emoji":"🥛","confidence":"label"|"estimate","note":"US label, 5.3 oz cup"}]}
+{"kind":"product"|"meal","items":[{"name":"Zero Sugar Vanilla Greek Yogurt","brand":"Chobani","serving":"1 cup (150 g)","servingGrams":150,"density":null,"cal":60,"p":12,"c":5,"f":0,"fiber":0,"sugar":0,"emoji":"🥛","confidence":"label"|"estimate","note":"US label, 5.3 oz cup"}]}
 
 Rules:
 - A specific branded product: return its US nutrition-label values per labeled serving as item 1, then up to 2 close variants. Never invent a product; if unsure of exact numbers give your best estimate and set confidence "estimate".
 - A generic food: one item with USDA-style values for a normal serving.
 - A meal description with several foods or quantities: kind "meal", one item per component with the stated quantity folded into "serving" and the numbers (e.g. serving "2 large eggs").
 - "cal" is kcal; p, c, f, fiber, sugar are grams; one decimal at most; never omit cal, p, c, f.
+- Always give "servingGrams" (the weight of one serving in grams, best estimate if the label lists volume). "density": grams per milliliter for liquids and pourables (water 1.0, milk 1.03, honey 1.42, oil 0.91), otherwise null.
 - "emoji": exactly one emoji that looks like the food. "note": at most 12 words on source or assumption.`;
 }
 const GEM = 'https://generativelanguage.googleapis.com/v1beta';
@@ -1065,7 +1076,7 @@ async function doAI(file){
     const items = Array.isArray(res?.items) ? res.items : [];
     d.kind = res?.kind === 'meal' ? 'meal' : 'ai';
     d.results = items.filter(it => it && it.name && isFinite(+it.cal)).slice(0, 6).map(it => ({
-      name: String(it.name).slice(0, 80), brand: it.brand ? String(it.brand).slice(0, 40) : '', serving: String(it.serving || '1 serving').slice(0, 60), servingGrams: num(it.servingGrams),
+      name: String(it.name).slice(0, 80), brand: it.brand ? String(it.brand).slice(0, 40) : '', serving: String(it.serving || '1 serving').slice(0, 60), servingGrams: num(it.servingGrams), density: num(it.density) || densityFor(it.name),
       cal: Math.max(0, r1(it.cal)), p: Math.max(0, r1(it.p)), c: Math.max(0, r1(it.c)), f: Math.max(0, r1(it.f)), fiber: r1(it.fiber), sugar: r1(it.sugar),
       emoji: firstEmoji(it.emoji), photo: thumb, confidence: file && it.confidence === 'label' ? 'photo' : 'estimate', note: it.note ? String(it.note).slice(0, 90) : '', source: file ? 'photo' : 'ai' }));
     if (!d.results.length) d.error = 'Nothing usable came back. Try a clearer photo or a more specific name.';
@@ -1120,55 +1131,83 @@ function openScanner(meal){
 }
 
 /* ---------- detail / approve ---------- */
+const UNITS = [['serving','serving',0.25,4],['g','g',5,0],['oz','oz',0.5,1],['ml','ml',10,0],['floz','fl oz',0.5,1],['tsp','tsp',1,1],['tbsp','tbsp',0.5,1],['cup','cup',0.25,2]];
+const TO_ML = { ml: 1, floz: 29.5735, tsp: 4.92892, tbsp: 14.7868, cup: 236.588 };
+function per100Of(item){ if (item.per100 && item.per100.cal != null) return item.per100; const g = num(item.servingGrams); if (g > 0 && item.cal != null) { const k = 100 / g; return { cal: r1(item.cal*k), p: r1(item.p*k), c: r1(item.c*k), f: r1(item.f*k), fiber: r1((item.fiber||0)*k), sugar: r1((item.sugar||0)*k) }; } return null; }
+function amountVals(item, unit, amt){
+  if (unit === 'serving') return { cal: item.cal*amt, p: item.p*amt, c: item.c*amt, f: item.f*amt, serving: item.serving, qty: amt, grams: item.servingGrams ? item.servingGrams*amt : null };
+  const per = per100Of(item); if (!per) return null;
+  const dens = item.density || 1.0;
+  const grams = unit === 'g' ? amt : unit === 'oz' ? amt*28.3495 : amt*TO_ML[unit]*dens;
+  const k = grams/100; const ul = UNITS.find(u => u[0] === unit)[1];
+  return { cal: per.cal*k, p: per.p*k, c: per.c*k, f: per.f*k, serving: `${r1(amt)} ${ul}${unit !== 'g' ? ` (${r0(grams)} g)` : ''}`, qty: 1, grams };
+}
 function openDetail(item, o={}){
   sheet.open = true; sheet.kind = 'detail'; sheet.ctl?.abort(); sheet.ctl = null;
-  const st = { qty: 1, meal: o.meal || defaultMeal(), save: o.save !== false && !o.fromLibrary, date: state.date, manual: !!o.manual, basis: 'serving', grams: item.servingGrams || 100 };
-  const canGrams = !!item.per100 && item.per100.cal != null;
-  const vals = () => { // per-unit values for the current basis
-    if (st.basis === 'grams' && canGrams) { const k = st.grams / 100; return { cal: item.per100.cal*k, p: item.per100.p*k, c: item.per100.c*k, f: item.per100.f*k, serving: `${r1(st.grams)} g` }; }
-    return { cal: item.cal, p: item.p, c: item.c, f: item.f, serving: item.serving };
-  };
+  const editing = o.edit || null;
+  const st = { unit: 'serving', amt: 1, meal: o.meal || (editing ? editing.meal : defaultMeal()), save: o.save !== false && !o.fromLibrary && !editing, date: state.date, manual: !!o.manual, manualBasis: 'serving' };
+  if (editing) { if (editing.unit && editing.unit !== 'serving' && editing.amt) { st.unit = editing.unit; st.amt = editing.amt; } else st.amt = editing.qty || 1; }
   const draw = () => {
-    const V = vals(); const tot = k => r0(V[k] * (st.basis === 'grams' ? 1 : st.qty));
-    const body = mountSheet(o.fromLibrary ? 'Log food' : st.manual ? 'Enter a food' : 'Approve & log', `
+    const canWeight = !!per100Of(item);
+    const V = amountVals(item, st.unit, st.amt) || amountVals(item, 'serving', st.amt);
+    const tot = k => r0(V[k]);
+    const udef = UNITS.find(u => u[0] === st.unit);
+    const quick = st.unit === 'serving' ? [0.5, 1, 1.5, 2] : st.unit === 'g' ? [10, 25, 50, 100, 150, 200] : st.unit === 'ml' ? [50, 100, 240, 500] : st.unit === 'oz' || st.unit === 'floz' ? [1, 2, 4, 8] : st.unit === 'tsp' || st.unit === 'tbsp' ? [1, 2, 3] : [0.25, 0.5, 1];
+    const body = mountSheet(editing ? 'Edit entry' : o.fromLibrary ? 'Log food' : st.manual ? 'Enter a food' : 'Approve & log', `
       <div class="detail">
-        ${st.manual ? `<div class="grid2"><div class="field"><label>Name</label><input data-e="name" value="${esc(item.name)}" placeholder="e.g. Protein bar"></div><div class="field"><label>Brand (optional)</label><input data-e="brand" value="${esc(item.brand)}"></div></div>
-          <div class="grid2"><div class="field"><label>Serving</label><input data-e="serving" value="${esc(item.serving)}" placeholder="1 bar (60 g)"></div><div class="field"><label>Emoji</label><input data-e="emoji" value="${esc(item.emoji)}" maxlength="4"></div></div>
-          <div class="grid2"><div class="field"><label>Calories per serving</label><input data-n="cal" type="number" inputmode="decimal" value="${item.cal||''}"></div><div class="field"><label>Protein g</label><input data-n="p" type="number" inputmode="decimal" value="${item.p||''}"></div><div class="field"><label>Carbs g</label><input data-n="c" type="number" inputmode="decimal" value="${item.c||''}"></div><div class="field"><label>Fat g</label><input data-n="f" type="number" inputmode="decimal" value="${item.f||''}"></div></div>`
-        : `<div class="head">${tileHtml({...item, photo: item.photoLarge || item.photo})}<div style="min-width:0"><h3>${esc(item.name)}</h3><p>${esc(item.brand ? item.brand + ' · ' : '')}${esc(item.quantity || '')}${item.code ? ` <span class="num" style="color:var(--faint)">#${esc(item.code)}</span>` : ''}</p><p>${item.confidence ? `<span class="conf ${esc(item.confidence)}" style="margin-left:0">${confLabel(item.confidence)}</span>` : ''} ${esc(item.note || '')}</p></div></div>`}
-        ${canGrams && !st.manual ? `<div class="basis"><button data-basis="serving" class="${st.basis==='serving'?'on':''}">Per serving · ${esc(item.serving)}</button><button data-basis="grams" class="${st.basis==='grams'?'on':''}">By weight</button>${st.basis==='grams' ? `<input id="grams" type="number" inputmode="decimal" value="${r1(st.grams)}" aria-label="grams"> g` : ''}</div>` : ''}
-        <div class="grid2">
-          ${st.basis === 'grams' ? `<div class="field"><label>Amount</label><div class="stepper"><button data-g="-10" aria-label="Less">−</button><input id="gramsIn" type="number" inputmode="decimal" value="${r1(st.grams)}"><button data-g="10" aria-label="More">+</button></div></div>`
-          : `<div class="field"><label>Servings</label><div class="stepper"><button data-step="-0.25" aria-label="Less">−</button><input id="qty" type="number" step="0.25" min="0.25" inputmode="decimal" value="${st.qty}"><button data-step="0.25" aria-label="More">+</button></div></div>`}
-          <div class="field"><label>Meal</label><select id="mealSel">${MEALS.map(([k,l]) => `<option value="${k}" ${st.meal===k?'selected':''}>${l}</option>`).join('')}</select></div>
+        ${st.manual ? `<div class="grid2"><div class="field"><label>Name</label><input data-e="name" value="${esc(item.name)}" placeholder="e.g. Honey"></div><div class="field"><label>Brand (optional)</label><input data-e="brand" value="${esc(item.brand)}"></div></div>
+          <div class="grid2"><div class="field"><label>Nutrition is per</label><div class="seg"><button data-mb="serving" class="${st.manualBasis==='serving'?'on':''}">a serving</button><button data-mb="100g" class="${st.manualBasis==='100g'?'on':''}">100 g</button></div></div><div class="field"><label>Emoji</label><input data-e="emoji" value="${esc(item.emoji)}" maxlength="4"></div></div>
+          ${st.manualBasis === 'serving' ? `<div class="grid2"><div class="field"><label>Serving description</label><input data-e="serving" value="${esc(item.serving)}" placeholder="1 tbsp (21 g)"></div><div class="field"><label>Serving weight (g)</label><input data-n="servingGrams" type="number" inputmode="decimal" value="${item.servingGrams||''}" placeholder="21"></div></div>` : ''}
+          <div class="grid2"><div class="field"><label>Calories${st.manualBasis === '100g' ? ' per 100 g' : ''}</label><input data-n="cal" type="number" inputmode="decimal" value="${item.cal||''}"></div><div class="field"><label>Protein g</label><input data-n="p" type="number" inputmode="decimal" value="${item.p||''}"></div><div class="field"><label>Carbs g</label><input data-n="c" type="number" inputmode="decimal" value="${item.c||''}"></div><div class="field"><label>Fat g</label><input data-n="f" type="number" inputmode="decimal" value="${item.f||''}"></div></div>
+          <div class="field"><label>Density, g per ml (only for liquids; honey 1.42, milk 1.03, oil 0.91)</label><input data-n="density" type="number" step="0.01" inputmode="decimal" value="${item.density||''}" placeholder="leave blank for solids"></div>`
+        : `<div class="head">${tileHtml({...item, photo: item.photoLarge || item.photo})}<div style="min-width:0"><h3>${esc(item.name)}</h3><p>${esc(item.brand ? item.brand + ' · ' : '')}${esc(item.quantity || '')}${item.code ? ` <span class="num" style="color:var(--faint)">#${esc(item.code)}</span>` : ''}</p><p>${item.confidence ? `<span class="conf ${esc(item.confidence)}" style="margin-left:0">${confLabel(item.confidence)}</span>` : ''} ${esc(item.note || '')}${item.serving ? ` · 1 serving = ${esc(item.serving)}` : ''}</p></div></div>`}
+        <div class="field"><label>Amount</label>
+          <div class="amount"><div class="stepper"><button data-step="-1" aria-label="Less">−</button><input id="amt" type="number" step="any" inputmode="decimal" value="${r1(st.amt)}"><button data-step="1" aria-label="More">+</button></div>
+          <select id="unit">${UNITS.map(u => `<option value="${u[0]}" ${st.unit === u[0] ? 'selected' : ''} ${u[0] !== 'serving' && !canWeight ? 'disabled' : ''}>${u[0] === 'serving' ? (st.amt === 1 ? 'serving' : 'servings') : u[1]}</option>`).join('')}</select></div>
+          <div class="quick" style="margin-top:8px">${quick.map(q => `<button data-q="${q}" class="${+r1(st.amt) === q ? 'on' : ''}">${q}${st.unit === 'serving' ? '×' : ' ' + udef[1]}</button>`).join('')}</div>
+          ${V.grams && st.unit !== 'g' ? `<div class="eq num">= ${r0(V.grams)} g${st.unit === 'serving' && item.servingGrams ? ` (${r1(item.servingGrams)} g per serving)` : ''}</div>` : ''}
+          ${!canWeight && !st.manual ? `<div class="hint" style="margin:6px 0 0">No serving weight on record for this item, so only servings are available. Enter it by hand to log by weight.</div>` : ''}
         </div>
+        <div class="field"><label>Meal</label><select id="mealSel">${MEALS.map(([k,l]) => `<option value="${k}" ${st.meal===k?'selected':''}>${l}</option>`).join('')}</select></div>
         <div class="macroline"><div><b class="num">${tot('cal')}</b><span>kcal</span></div><div><b class="num" style="color:var(--protein)">${tot('p')}</b><span>protein</span></div><div><b class="num" style="color:var(--carbs)">${tot('c')}</b><span>carbs</span></div><div><b class="num" style="color:var(--fat)">${tot('f')}</b><span>fat</span></div></div>
-        ${o.fromLibrary ? '' : `<label class="check"><input type="checkbox" id="saveChk" ${st.save?'checked':''}> Approve and save to My Foods for one-tap logging</label>`}
+        ${o.fromLibrary || editing ? '' : `<label class="check"><input type="checkbox" id="saveChk" ${st.save?'checked':''}> Approve and save to My Foods for one-tap logging</label>`}
         ${item.confidence === 'estimate' ? `<div class="note">This is an estimate, not a label. Compare with the package once before saving.</div>` : ''}
         <div style="display:flex;gap:8px">
           ${o.back ? `<button class="btn ghost" id="back">Back</button>` : ''}
-          <button class="btn primary" id="log" style="flex:1">Add to ${MEAL_NAME[st.meal]}${state.date !== todayStr() ? ' · ' + fmtDate(state.date,{month:'short',day:'numeric'}) : ''}</button>
+          ${editing ? `<button class="btn danger" id="delEntry">Remove</button>` : ''}
+          <button class="btn primary" id="log" style="flex:1">${editing ? 'Save changes' : `Add to ${MEAL_NAME[st.meal]}${state.date !== todayStr() ? ' · ' + fmtDate(state.date,{month:'short',day:'numeric'}) : ''}`}</button>
         </div>
         ${o.fromLibrary ? `<button class="link" id="delFood" style="color:var(--warn);align-self:flex-start">Remove from My Foods</button>` : ''}
+        ${editing && !editing.foodId ? `<button class="link" id="saveLib">Save this to My Foods too</button>` : ''}
       </div>`);
-    const refresh = () => { const V2 = vals(); const m = st.basis === 'grams' ? 1 : st.qty; const b = body.querySelectorAll('.macroline b'); b[0].textContent = r0(V2.cal*m); b[1].textContent = r0(V2.p*m); b[2].textContent = r0(V2.c*m); b[3].textContent = r0(V2.f*m); };
-    const qtyI = $('#qty', body); if (qtyI) { qtyI.oninput = () => { st.qty = Math.max(0.25, parseFloat(qtyI.value) || 1); refresh(); }; body.querySelectorAll('[data-step]').forEach(b => b.onclick = () => { qtyI.value = Math.max(0.25, (parseFloat(qtyI.value)||1) + parseFloat(b.dataset.step)); qtyI.oninput(); }); }
-    const gI = $('#gramsIn', body); if (gI) { const sync = v => { st.grams = Math.max(1, v || 1); gI.value = r1(st.grams); const g2 = $('#grams', body); if (g2) g2.value = r1(st.grams); refresh(); }; gI.oninput = () => sync(parseFloat(gI.value)); $('#grams', body)?.addEventListener('input', e => sync(parseFloat(e.target.value))); body.querySelectorAll('[data-g]').forEach(b => b.onclick = () => sync(st.grams + parseFloat(b.dataset.g))); }
-    body.querySelectorAll('[data-basis]').forEach(b => b.onclick = () => { st.basis = b.dataset.basis; draw(); });
-    $('#mealSel', body).onchange = e => { st.meal = e.target.value; $('#log', body).textContent = `Add to ${MEAL_NAME[st.meal]}`; };
+    const amtI = $('#amt', body), unitS = $('#unit', body);
+    const refresh = () => { const V2 = amountVals(item, st.unit, st.amt) || amountVals(item, 'serving', st.amt); const b = body.querySelectorAll('.macroline b'); b[0].textContent = r0(V2.cal); b[1].textContent = r0(V2.p); b[2].textContent = r0(V2.c); b[3].textContent = r0(V2.f); const eq = body.querySelector('.eq'); if (eq) eq.textContent = V2.grams && st.unit !== 'g' ? `= ${r0(V2.grams)} g` : ''; body.querySelectorAll('[data-q]').forEach(q => q.classList.toggle('on', +q.dataset.q === +r1(st.amt))); };
+    amtI.oninput = () => { st.amt = Math.max(0, parseFloat(amtI.value) || 0); refresh(); };
+    body.querySelectorAll('[data-step]').forEach(b => b.onclick = () => { st.amt = Math.max(udef[2], r1(st.amt + udef[2] * +b.dataset.step)); amtI.value = r1(st.amt); refresh(); });
+    body.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { st.amt = +b.dataset.q; amtI.value = st.amt; refresh(); });
+    unitS.onchange = () => { const nu = unitS.value; if (nu === st.unit) return; const defaults = { serving: 1, g: item.servingGrams ? r0(item.servingGrams) : 100, oz: 1, ml: 100, floz: 1, tsp: 1, tbsp: 1, cup: 0.5 }; st.unit = nu; st.amt = defaults[nu]; draw(); };
+    $('#mealSel', body).onchange = e => { st.meal = e.target.value; if (!editing) $('#log', body).textContent = `Add to ${MEAL_NAME[st.meal]}`; };
     $('#saveChk', body)?.addEventListener('change', e => st.save = e.target.checked);
     body.querySelectorAll('[data-e]').forEach(i => i.oninput = () => { item[i.dataset.e] = i.value; });
-    body.querySelectorAll('[data-n]').forEach(i => i.oninput = () => { item[i.dataset.n] = Math.max(0, parseFloat(i.value) || 0); refresh(); });
+    body.querySelectorAll('[data-n]').forEach(i => i.oninput = () => { const val = parseFloat(i.value); item[i.dataset.n] = i.dataset.n === 'density' ? (val > 0 ? val : null) : Math.max(0, val || 0); if (st.manual) { if (st.manualBasis === '100g') { item.per100 = { cal: item.cal, p: item.p, c: item.c, f: item.f }; item.servingGrams = 100; item.serving = '100 g'; } else item.per100 = null; } refresh(); });
+    body.querySelectorAll('[data-mb]').forEach(b => b.onclick = () => { st.manualBasis = b.dataset.mb; if (st.manualBasis === '100g') { item.per100 = { cal: item.cal, p: item.p, c: item.c, f: item.f }; item.servingGrams = 100; item.serving = '100 g'; st.unit = 'g'; st.amt = 100; } else { item.per100 = null; st.unit = 'serving'; st.amt = 1; } draw(); });
     $('#back', body)?.addEventListener('click', o.back);
     $('#delFood', body)?.addEventListener('click', () => { if (!confirm(`Remove “${item.name}” from My Foods? Past logs keep their numbers.`)) return; delete state.foods[item.foodId]; persistFood(); closeSheet(); toast('Removed.'); render(); });
+    $('#delEntry', body)?.addEventListener('click', () => { removeEntry(state.date, editing.id); closeSheet(); toast('Removed.'); render(); });
+    $('#saveLib', body)?.addEventListener('click', () => { const fid = uid('f_'); state.foods[fid] = { id: fid, name: item.name, brand: item.brand || '', serving: item.serving, servingGrams: item.servingGrams || null, per100: per100Of(item), density: item.density || null, cal: item.cal, p: item.p, c: item.c, f: item.f, emoji: item.emoji, photo: item.photo || null, source: 'log', uses: 1, createdAt: Date.now(), lastUsed: Date.now() }; persistFood(); updateEntry(state.date, editing.id, { foodId: fid }); closeSheet(); toast('Saved to My Foods.'); render(); });
     $('#log', body).onclick = () => {
-      if (st.manual) { item.name = (item.name||'').trim(); item.emoji = firstEmoji(item.emoji); if (!item.name) return toast('Give it a name.'); if (!(item.cal >= 0)) return toast('Enter calories.'); }
-      const V2 = vals(); const qty = st.basis === 'grams' ? 1 : st.qty;
-      let foodId = item.foodId || null;
-      if (st.save && !foodId) { foodId = uid('f_'); state.foods[foodId] = { id: foodId, name: item.name, brand: item.brand||'', code: item.code||null, quantity: item.quantity||'', serving: item.serving, servingGrams: item.servingGrams||null, per100: item.per100||null, cal: item.cal, p: item.p, c: item.c, f: item.f, fiber: item.fiber||0, sugar: item.sugar||0, emoji: item.emoji||'🍽️', photo: item.photo||null, photoLarge: item.photoLarge||null, source: item.source||'off', confidence: item.confidence||null, note: item.note||'', uses: 0, createdAt: Date.now(), lastUsed: Date.now() }; }
-      if (foodId && state.foods[foodId]) { state.foods[foodId] = { ...state.foods[foodId], uses: (state.foods[foodId].uses||0) + 1, lastUsed: Date.now() }; persistFood(); }
-      addEntry(st.date, { id: uid('e_'), foodId, name: item.name, brand: item.brand||'', emoji: item.emoji||'🍽️', photo: item.photo||null, serving: V2.serving, qty, cal: r1(V2.cal), p: r1(V2.p), c: r1(V2.c), f: r1(V2.f), meal: st.meal, ts: Date.now() });
-      closeSheet(); toast(`Added ${item.name} · ${r0(V2.cal*qty)} kcal${st.save && !item.foodId ? ' · saved to My Foods' : ''}`); go('today');
+      if (st.manual) { item.name = (item.name||'').trim(); item.emoji = firstEmoji(item.emoji); if (!item.name) return toast('Give it a name.'); if (!(item.cal >= 0)) return toast('Enter calories.'); if (st.manualBasis === '100g') { item.per100 = { cal: item.cal, p: item.p, c: item.c, f: item.f }; item.servingGrams = 100; item.serving = '100 g'; } }
+      if (!(st.amt > 0)) return toast('Enter an amount.');
+      const V2 = amountVals(item, st.unit, st.amt) || amountVals(item, 'serving', st.amt);
+      const per100 = per100Of(item);
+      let foodId = item.foodId || (editing ? editing.foodId : null) || null;
+      if (st.save && !foodId) { foodId = uid('f_'); state.foods[foodId] = { id: foodId, name: item.name, brand: item.brand||'', code: item.code||null, quantity: item.quantity||'', serving: item.serving, servingGrams: item.servingGrams||null, per100, density: item.density||null, cal: item.cal, p: item.p, c: item.c, f: item.f, fiber: item.fiber||0, sugar: item.sugar||0, emoji: item.emoji||'🍽️', photo: item.photo||null, photoLarge: item.photoLarge||null, source: item.source||'off', confidence: item.confidence||null, note: item.note||'', uses: 0, createdAt: Date.now(), lastUsed: Date.now() }; }
+      if (foodId && state.foods[foodId] && !editing) { state.foods[foodId] = { ...state.foods[foodId], uses: (state.foods[foodId].uses||0) + 1, lastUsed: Date.now() }; persistFood(); }
+      const unitVals = st.unit === 'serving' ? { cal: r1(item.cal), p: r1(item.p), c: r1(item.c), f: r1(item.f) } : { cal: r1(V2.cal), p: r1(V2.p), c: r1(V2.c), f: r1(V2.f) };
+      const entry = { name: item.name, brand: item.brand||'', emoji: item.emoji||'🍽️', photo: item.photo||null, serving: V2.serving, qty: V2.qty, ...unitVals, unit: st.unit, amt: st.amt, grams: V2.grams ? r1(V2.grams) : null, per100, density: item.density||null, servingGrams: item.servingGrams||null, baseServing: item.serving, meal: st.meal };
+      if (editing) { updateEntry(state.date, editing.id, entry); closeSheet(); toast('Updated'); render(); return; }
+      addEntry(st.date, { id: uid('e_'), foodId, ...entry, ts: Date.now() });
+      closeSheet(); toast(`Added ${item.name} · ${r0(V2.cal)} kcal${st.save && !item.foodId ? ' · saved to My Foods' : ''}`); go('today');
     };
   };
   draw();
@@ -1176,49 +1215,11 @@ function openDetail(item, o={}){
 
 function openEditEntry(id){
   const d = day(state.date); const e = d.entries.find(x => x.id === id); if (!e) return;
-  sheet.open = true; sheet.kind = 'edit';
-  let qty = e.qty, meal = e.meal;
-  const body = mountSheet('Edit entry', `<div class="detail">
-    <div class="head">${tileHtml(e)}<div><h3>${esc(e.name)}</h3><p>${esc(e.brand ? e.brand + ' · ' : '')}${esc(e.serving)} · ${fmtN(e.cal)} kcal each</p></div></div>
-    <div class="grid2">
-      <div class="field"><label>Servings</label><div class="stepper"><button data-step="-0.25" aria-label="Less">−</button><input id="qty" type="number" step="0.25" min="0.25" inputmode="decimal" value="${qty}"><button data-step="0.25" aria-label="More">+</button></div></div>
-      <div class="field"><label>Meal</label><select id="mealSel">${MEALS.map(([k,l]) => `<option value="${k}" ${meal===k?'selected':''}>${l}</option>`).join('')}</select></div>
-    </div>
-    <div class="macroline"><div><b class="num">${r0(e.cal*qty)}</b><span>kcal</span></div><div><b class="num" style="color:var(--protein)">${r0(e.p*qty)}</b><span>protein</span></div><div><b class="num" style="color:var(--carbs)">${r0(e.c*qty)}</b><span>carbs</span></div><div><b class="num" style="color:var(--fat)">${r0(e.f*qty)}</b><span>fat</span></div></div>
-    <div style="display:flex;gap:8px"><button class="btn danger" id="del">Remove</button><button class="btn primary" id="save" style="flex:1">Save</button></div>
-    ${!e.foodId ? `<button class="link" id="saveLib">Save this to My Foods too</button>` : ''}
-  </div>`);
-  const qtyI = $('#qty', body);
-  const refresh = () => { qty = Math.max(0.25, parseFloat(qtyI.value) || 1); const b = body.querySelectorAll('.macroline b'); b[0].textContent = r0(e.cal*qty); b[1].textContent = r0(e.p*qty); b[2].textContent = r0(e.c*qty); b[3].textContent = r0(e.f*qty); };
-  qtyI.oninput = refresh;
-  body.querySelectorAll('[data-step]').forEach(b => b.onclick = () => { qtyI.value = Math.max(0.25, (parseFloat(qtyI.value)||1) + parseFloat(b.dataset.step)); refresh(); });
-  $('#mealSel', body).onchange = ev => meal = ev.target.value;
-  $('#del', body).onclick = () => { removeEntry(state.date, id); closeSheet(); toast('Removed.'); render(); };
-  $('#save', body).onclick = () => { updateEntry(state.date, id, { qty, meal }); closeSheet(); render(); };
-  $('#saveLib', body)?.addEventListener('click', () => { const fid = uid('f_'); state.foods[fid] = { id: fid, name: e.name, brand: e.brand, serving: e.serving, cal: e.cal, p: e.p, c: e.c, f: e.f, emoji: e.emoji, photo: e.photo||null, source: 'log', uses: 1, createdAt: Date.now(), lastUsed: Date.now() }; updateEntry(state.date, id, { foodId: fid }); closeSheet(); toast('Saved to My Foods.'); render(); });
-}
-
-function openExercise(date){
-  sheet.open = true; sheet.kind = 'exercise';
-  const kg = (latestWeight() || 180) * LB; let sel = 0, minutes = 30, kcal = null;
-  const calc = () => Math.round(EXERCISES[sel][1] * kg * minutes / 60);
-  const draw = () => {
-    const body = mountSheet('Add exercise', `<div class="detail">
-      <div class="exlist">${EXERCISES.map((e, i) => `<button data-ex="${i}" class="${i === sel ? 'on' : ''}"><i>${e[2]}</i>${e[0]}</button>`).join('')}</div>
-      <div class="grid2">
-        <div class="field"><label>Minutes</label><div class="stepper"><button data-m="-5" aria-label="Less">−</button><input id="mins" type="number" inputmode="numeric" value="${minutes}"><button data-m="5" aria-label="More">+</button></div></div>
-        <div class="field"><label>Calories burned</label><input id="kcal" type="number" inputmode="numeric" value="${kcal ?? calc()}"></div>
-      </div>
-      <p class="hint" style="margin:0">Estimated from your weight (${fmtW(latestWeight())}) and the activity’s intensity. If your watch gives you a number, type that instead.</p>
-      <button class="btn primary block" id="ok">Add ${EXERCISES[sel][0]}</button></div>`);
-    body.querySelectorAll('[data-ex]').forEach(b => b.onclick = () => { sel = +b.dataset.ex; kcal = null; draw(); });
-    const mi = $('#mins', body), ki = $('#kcal', body);
-    mi.oninput = () => { minutes = Math.max(1, parseInt(mi.value) || 1); if (kcal == null) ki.value = calc(); };
-    body.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { minutes = Math.max(5, minutes + parseInt(b.dataset.m)); mi.value = minutes; if (kcal == null) ki.value = calc(); });
-    ki.oninput = () => { kcal = parseInt(ki.value) || null; };
-    $('#ok', body).onclick = () => { const k = parseInt(ki.value) || 0; if (k <= 0) return toast('Enter the calories burned.'); addExercise(date, { id: uid('x_'), name: EXERCISES[sel][0] === 'Other' ? 'Exercise' : EXERCISES[sel][0], emoji: EXERCISES[sel][2], minutes, kcal: k, ts: Date.now() }); closeSheet(); toast(`Added ${EXERCISES[sel][0]} · +${k} kcal`); render(); };
-  };
-  draw();
+  const lib = e.foodId ? state.foods[e.foodId] : null;
+  const item = lib ? { ...lib, foodId: e.foodId } : { name: e.name, brand: e.brand, emoji: e.emoji, photo: e.photo || null, serving: e.baseServing || (e.unit && e.unit !== 'serving' ? (e.servingGrams ? `${e.servingGrams} g` : '1 serving') : e.serving), servingGrams: e.servingGrams || null, per100: e.per100 || null, density: e.density || null,
+    cal: e.unit && e.unit !== 'serving' && e.per100 && e.servingGrams ? r1(e.per100.cal * e.servingGrams / 100) : e.cal, p: e.unit && e.unit !== 'serving' && e.per100 && e.servingGrams ? r1(e.per100.p * e.servingGrams / 100) : e.p, c: e.unit && e.unit !== 'serving' && e.per100 && e.servingGrams ? r1(e.per100.c * e.servingGrams / 100) : e.c, f: e.unit && e.unit !== 'serving' && e.per100 && e.servingGrams ? r1(e.per100.f * e.servingGrams / 100) : e.f };
+  if (item.per100 && !item.servingGrams) { item.servingGrams = 100; item.serving = '100 g'; Object.assign(item, { cal: item.per100.cal, p: item.per100.p, c: item.per100.c, f: item.per100.f }); }
+  openDetail(item, { edit: e, meal: e.meal });
 }
 
 function openWeigh(date){
