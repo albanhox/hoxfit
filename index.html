@@ -312,7 +312,7 @@ nav.tabs button.on{color:var(--accent);background:var(--accent-soft)}
 (() => {
 'use strict';
 /* ---------- constants & helpers ---------- */
-const LS_KEY = 'hoxfit:v3', LS_AI = 'hoxfit:aikey', LS_USDA = 'hoxfit:usdakey';
+const LS_KEY = 'hoxfit:v3', LS_AI = 'hoxfit:aikey', LS_USDA = 'hoxfit:usdakey', LS_GEM = 'hoxfit:gemkey', LS_GEMMODEL = 'hoxfit:gemmodel', LS_PROV = 'hoxfit:aiprovider';
 const OFF = 'https://world.openfoodfacts.org';
 const OFF_FIELDS = 'code,product_name,product_name_en,brands,quantity,serving_size,serving_quantity,image_front_small_url,image_front_url,nutriments';
 const MEALS = [['breakfast','Breakfast'],['lunch','Lunch'],['dinner','Dinner'],['snack','Snacks']];
@@ -356,11 +356,13 @@ const GENERIC = [
 ];
 const GENERIC_ITEMS = GENERIC.map(([name,emoji,cal,p,c,f,serving,g]) => ({ name, brand: '', emoji, serving, servingGrams: g, per100: {cal,p,c,f}, cal: r1(cal*g/100), p: r1(p*g/100), c: r1(c*g/100), f: r1(f*g/100), source: 'generic', confidence: 'generic', note: 'USDA-based generic value' }));
 
-const state = { profile: null, foods: {}, days: {}, date: todayStr(), tab: 'today', aiKey: null, usdaKey: null, theme: 'system', ringPrev: null };
+const state = { profile: null, foods: {}, days: {}, date: todayStr(), tab: 'today', aiKey: null, usdaKey: null, theme: 'system', ringPrev: null, gemKey: null, gemModel: null, aiProvider: null };
 const EXERCISES = [['Walking',3.5,'🚶'],['Running',9.8,'🏃'],['Cycling',7.5,'🚴'],['Lifting',6,'🏋️'],['HIIT',8,'🔥'],['Swimming',7,'🏊'],['Hiking',6,'🥾'],['Sports',6.5,'🏀'],['Yoga',2.5,'🧘'],['Other',5,'⚡']];
 
 /* ---------- storage ---------- */
-function load(){ try { const j = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); state.profile = j.profile || null; state.foods = j.foods || {}; state.days = j.days || {}; } catch {} try { state.aiKey = localStorage.getItem(LS_AI) || null; state.usdaKey = localStorage.getItem(LS_USDA) || null; state.theme = localStorage.getItem('hoxfit:theme') || 'system'; } catch {} }
+function load(){ try { const j = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); state.profile = j.profile || null; state.foods = j.foods || {}; state.days = j.days || {}; } catch {} try { state.aiKey = localStorage.getItem(LS_AI) || null; state.usdaKey = localStorage.getItem(LS_USDA) || null; state.theme = localStorage.getItem('hoxfit:theme') || 'system'; state.gemKey = localStorage.getItem(LS_GEM) || null; state.gemModel = localStorage.getItem(LS_GEMMODEL) || null; state.aiProvider = localStorage.getItem(LS_PROV) || null; } catch {} }
+const aiProvider = () => (state.aiProvider === 'gemini' && state.gemKey) ? 'gemini' : (state.aiProvider === 'anthropic' && state.aiKey) ? 'anthropic' : state.gemKey ? 'gemini' : state.aiKey ? 'anthropic' : null;
+const aiAvailable = () => !!aiProvider();
 function save(){ try { localStorage.setItem(LS_KEY, JSON.stringify({ profile: state.profile, foods: state.foods, days: state.days, v: 3, savedAt: Date.now() })); } catch (e) { toast('Could not save. Storage may be full or blocked.'); } }
 const persistProfile = () => save(), persistFood = () => save(), persistDay = () => save();
 
@@ -664,8 +666,11 @@ function renderGoals(){
     </div>
     <div class="card">
       <h3>AI assist (optional)</h3>
-      <p class="hint">With your own Anthropic API key, you can type a whole meal (“2 eggs, toast with butter, coffee with cream”) or photograph a nutrition label and have it read into numbers. The key stays in this browser only and is never included in exports.</p>
-      <div class="inline"><div class="field"><label>Anthropic API key</label><input id="aiKey" type="password" autocomplete="off" placeholder="sk-ant-…" value="${esc(state.aiKey||'')}"></div><button class="btn" id="saveKey">${state.aiKey ? 'Update' : 'Save key'}</button>${state.aiKey ? '<button class="btn ghost" id="clearKey">Remove</button>' : ''}</div>
+      <p class="hint">Type a whole meal (“2 eggs, toast with butter, coffee with cream”) or photograph a nutrition label and have it read into numbers. Works with a Google Gemini key (free tier at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com</a>) or an Anthropic key. Keys stay in this browser only and are never included in exports.</p>
+      ${state.gemKey && state.aiKey ? `<div class="field" style="margin-bottom:10px"><label>Use</label><div class="seg"><button data-prov="gemini" class="${aiProvider()==='gemini'?'on':''}">Gemini</button><button data-prov="anthropic" class="${aiProvider()==='anthropic'?'on':''}">Claude</button></div></div>` : ''}
+      <div class="inline"><div class="field"><label>Gemini API key ${state.gemKey ? `· using ${esc(state.gemModel || 'gemini-2.5-flash')}` : ''}</label><input id="gemKey" type="password" autocomplete="off" placeholder="AIza…" value="${esc(state.gemKey||'')}"></div><button class="btn" id="saveGem">${state.gemKey ? 'Update' : 'Save key'}</button>${state.gemKey ? '<button class="btn ghost" id="clearGem">Remove</button>' : ''}</div>
+      ${state.gemKey ? `<div class="inline" style="margin-top:10px"><div class="field"><label>Gemini model (auto-detected; change if you like)</label><input id="gemModel" autocomplete="off" value="${esc(state.gemModel || 'gemini-2.5-flash')}"></div><button class="btn ghost" id="saveGemModel">Set</button></div>` : ''}
+      <div class="inline" style="margin-top:10px"><div class="field"><label>Anthropic API key</label><input id="aiKey" type="password" autocomplete="off" placeholder="sk-ant-…" value="${esc(state.aiKey||'')}"></div><button class="btn" id="saveKey">${state.aiKey ? 'Update' : 'Save key'}</button>${state.aiKey ? '<button class="btn ghost" id="clearKey">Remove</button>' : ''}</div>
     </div>
     <div class="card">
       <h3>Your data</h3>
@@ -710,6 +715,10 @@ function renderGoals(){
   $('#saveKey').onclick = () => { const k = $('#aiKey').value.trim(); if (!k.startsWith('sk-ant-')) return toast('That does not look like an Anthropic key (starts with sk-ant-).'); state.aiKey = k; try { localStorage.setItem(LS_AI, k); } catch {} toast('AI assist is on.'); renderGoals(); };
   $('#saveUsda').onclick = () => { const k = $('#usdaKey').value.trim(); if (k.length < 20) return toast('That key looks too short.'); state.usdaKey = k; try { localStorage.setItem(LS_USDA, k); } catch {} toast('USDA key saved.'); renderGoals(); };
   $('#clearUsda')?.addEventListener('click', () => { state.usdaKey = null; try { localStorage.removeItem(LS_USDA); } catch {} toast('Key removed.'); renderGoals(); });
+  $('#saveGem').onclick = async () => { const k = $('#gemKey').value.trim(); if (k.length < 20) return toast('That key looks too short.'); const btn = $('#saveGem'); btn.disabled = true; btn.textContent = 'Checking…'; try { const m = await detectGeminiModel(k); state.gemKey = k; state.gemModel = m; try { localStorage.setItem(LS_GEM, k); localStorage.setItem(LS_GEMMODEL, m); } catch {} toast(`Gemini is on · ${m}`); } catch (e) { toast(e.status === 400 || e.status === 403 ? 'Google rejected that key. Check it and try again.' : 'Could not verify the key right now. Saved anyway.'); if (!(e.status === 400 || e.status === 403)) { state.gemKey = k; state.gemModel = state.gemModel || 'gemini-2.5-flash'; try { localStorage.setItem(LS_GEM, k); localStorage.setItem(LS_GEMMODEL, state.gemModel); } catch {} } } renderGoals(); };
+  $('#clearGem')?.addEventListener('click', () => { state.gemKey = null; state.gemModel = null; try { localStorage.removeItem(LS_GEM); localStorage.removeItem(LS_GEMMODEL); } catch {} toast('Gemini key removed.'); renderGoals(); });
+  $('#saveGemModel')?.addEventListener('click', () => { const m = $('#gemModel').value.trim(); if (!m) return; state.gemModel = m; try { localStorage.setItem(LS_GEMMODEL, m); } catch {} toast(`Using ${m}`); renderGoals(); });
+  v.querySelectorAll('[data-prov]').forEach(b => b.onclick = () => { state.aiProvider = b.dataset.prov; try { localStorage.setItem(LS_PROV, state.aiProvider); } catch {} renderGoals(); });
   $('#clearKey')?.addEventListener('click', () => { state.aiKey = null; try { localStorage.removeItem(LS_AI); } catch {} toast('Key removed.'); renderGoals(); });
   $('#exportJson').onclick = () => { const blob = new Blob([JSON.stringify({ profile: state.profile, foods: state.foods, days: state.days, v: 3, exportedAt: new Date().toISOString() }, null, 1)], {type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `hoxfit-backup-${todayStr()}.json`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); toast('Backup downloaded.'); };
   $('#importJson').onchange = async e => {
@@ -830,7 +839,37 @@ Rules:
 - "cal" is kcal; p, c, f, fiber, sugar are grams; one decimal at most; never omit cal, p, c, f.
 - "emoji": exactly one emoji that looks like the food. "note": at most 12 words on source or assumption.`;
 }
+const GEM = 'https://generativelanguage.googleapis.com/v1beta';
+async function detectGeminiModel(key, signal){
+  try {
+    const r = await fetch(`${GEM}/models?key=${encodeURIComponent(key)}&pageSize=200`, { signal });
+    if (!r.ok) { const e = new Error('models ' + r.status); e.status = r.status; throw e; }
+    const j = await r.json();
+    const cands = (j.models || []).map(m => (m.name || '').replace(/^models\//, '')).filter(n => /^gemini-\d+(\.\d+)?-flash$/.test(n));
+    cands.sort((a, b) => parseFloat(b.match(/gemini-([\d.]+)/)[1]) - parseFloat(a.match(/gemini-([\d.]+)/)[1]));
+    return cands[0] || 'gemini-2.5-flash';
+  } catch (e) { if (e.status === 400 || e.status === 403) throw e; return 'gemini-2.5-flash'; }
+}
+async function geminiLookup(q, imageDataUrl, signal){
+  const parts = [{ text: aiPrompt(q, !!imageDataUrl) }];
+  if (imageDataUrl) parts.push({ inline_data: { mime_type: 'image/jpeg', data: imageDataUrl.split(',')[1] } });
+  const model = state.gemModel || 'gemini-2.5-flash';
+  const r = await fetch(`${GEM}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(state.gemKey)}`, { method: 'POST', signal,
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ contents: [{ role: 'user', parts }], generationConfig: { response_mime_type: 'application/json', temperature: 0.2, maxOutputTokens: 4000 } }) });
+  if (!r.ok) { let msg = ''; try { msg = (await r.json()).error?.message || ''; } catch {} const e = new Error(msg || ('api ' + r.status)); e.status = r.status; if (r.status === 400 && /API key/i.test(msg)) e.status = 401; if (r.status === 404) e.message = `Model “${model}” was not found. Set a different Gemini model under Plan → AI assist.`; throw e; }
+  const j = await r.json();
+  const cand = j.candidates?.[0];
+  if (!cand || (cand.finishReason && /SAFETY|BLOCK|PROHIBITED/i.test(cand.finishReason) && !cand.content)) throw Object.assign(new Error('refused'), { refused: true });
+  const text = (cand.content?.parts || []).map(p2 => p2.text || '').join('');
+  const s0 = text.indexOf('{'), e2 = text.lastIndexOf('}'); if (s0 < 0 || e2 < 0) throw Object.assign(new Error('nojson'), { nojson: true });
+  return JSON.parse(text.slice(s0, e2 + 1));
+}
 async function aiLookup(q, imageDataUrl, signal){
+  if (aiProvider() === 'gemini') return geminiLookup(q, imageDataUrl, signal);
+  return claudeLookup(q, imageDataUrl, signal);
+}
+async function claudeLookup(q, imageDataUrl, signal){
   const content = [];
   if (imageDataUrl) content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: imageDataUrl.split(',')[1] } });
   content.push({ type: 'text', text: aiPrompt(q, !!imageDataUrl) });
@@ -874,14 +913,14 @@ function renderSheet(){
     <div class="tools">
       <button class="btn" id="scanBtn"><svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 8v8M11 8v8M14 8v8M17 8v8"/></svg>Scan barcode</button>
       <label class="btn" style="cursor:pointer"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Photo of label<input type="file" id="photo" accept="image/*" capture="environment" hidden></label>
-      ${state.aiKey ? `<button class="btn" id="aiBtn" ${d.status ? 'disabled' : ''}>✦ Ask AI</button>` : ''}
+      ${aiAvailable() ? `<button class="btn" id="aiBtn" ${d.status ? 'disabled' : ''}>✦ Ask AI</button>` : ''}
     </div>
     ${d.status ? `<div class="thinking"><span class="spin"></span><span>${esc(d.status)}</span><button class="link" id="stop" style="margin-left:auto">Stop</button></div><div class="skel"></div><div class="skel" style="opacity:.7"></div><div class="skel" style="opacity:.4"></div>` : ''}
     ${d.error ? `<div class="err">${esc(d.error)}</div>` : ''}
     <div id="liveLists" style="display:contents">${liveHtml()}</div>
     ${d.results ? `<div class="subh">${d.results.length ? (d.kind === 'meal' ? 'Broken down — add each item' : d.kind === 'ai' ? 'AI results — check before saving' : 'Products — pick the exact one') : 'No products found'}</div>
       ${d.results.map((r, i) => resultRow(r, `data-res="${i}"`)).join('')}
-      ${!d.results.length ? `<div class="note">Try fewer words (brand + flavor works best), scan the barcode, ${state.aiKey ? 'or tap Ask AI for a best estimate.' : 'or enter the label by hand.'}</div>` : `<div class="note">Not the exact one? Add the flavor or size and search again, or scan the barcode. Tick “Approve and save” on the one you trust and it’s one tap next time.</div>`}` : ''}
+      ${!d.results.length ? `<div class="note">Try fewer words (brand + flavor works best), scan the barcode, ${aiAvailable() ? 'or tap Ask AI for a best estimate.' : 'or enter the label by hand.'}</div>` : `<div class="note">Not the exact one? Add the flavor or size and search again, or scan the barcode. Tick “Approve and save” on the one you trust and it’s one tap next time.</div>`}` : ''}
     <button class="link" id="manual">Enter nutrition by hand →</button>`);
   const bindLive = () => {
     body.querySelectorAll('[data-gen]').forEach(b => b.onclick = () => openDetail({ ...d.generic[+b.dataset.gen] }, { save: true, meal: d.meal, back: backToAdd }));
@@ -921,10 +960,10 @@ async function doSearch(){
 }
 async function doAI(file){
   const d = sheet.data, q = d.q.trim();
-  if (!state.aiKey) { d.error = 'Reading a label photo needs AI assist. Add your Anthropic API key under Plan, or scan the barcode instead.'; renderSheet(); return; }
+  if (!aiAvailable()) { d.error = 'Reading a label photo needs AI assist. Add a Gemini or Anthropic API key under Plan → AI assist, or scan the barcode instead.'; renderSheet(); return; }
   if (!file && q.length < 2) return toast('Type a food or meal first.');
   sheet.ctl?.abort(); const ctl = new AbortController(); sheet.ctl = ctl;
-  d.error = null; d.results = null; d.kind = null; d.status = file ? 'Reading the label…' : 'Asking Claude…'; renderSheet();
+  d.error = null; d.results = null; d.kind = null; d.status = file ? 'Reading the label…' : (aiProvider() === 'gemini' ? 'Asking Gemini…' : 'Asking Claude…'); renderSheet();
   let img = null, thumb = null;
   try { if (file) { img = await fileToJpeg(file, 1400); thumb = await squareThumb(img); } } catch { d.error = 'Could not read that photo.'; }
   if (!d.error) try {
@@ -938,7 +977,7 @@ async function doAI(file){
     if (!d.results.length) d.error = 'Nothing usable came back. Try a clearer photo or a more specific name.';
   } catch (e) {
     if (sheet.ctl !== ctl || e.name === 'AbortError') return;
-    d.error = e.status === 401 ? 'The API key was rejected. Check it under Plan → AI assist.' : e.status === 429 ? 'Rate limited. Give it a moment.' : e.refused ? 'Claude declined that request. Try rephrasing.' : e.nojson ? 'The answer could not be read. Try again.' : `AI lookup failed${e.message ? ': ' + e.message : ''}.`;
+    d.error = e.status === 401 || e.status === 403 ? 'The API key was rejected. Check it under Plan → AI assist.' : e.status === 429 ? 'Rate limited by the AI provider. Give it a moment.' : e.refused ? 'The AI declined that request. Try rephrasing.' : e.nojson ? 'The answer could not be read. Try again.' : `AI lookup failed${e.message ? ': ' + e.message : ''}.`;
   } finally { if (sheet.ctl === ctl) { d.status = null; sheet.ctl = null; if (sheet.open && sheet.kind === 'add') renderSheet(); } }
 }
 
@@ -958,7 +997,7 @@ function openScanner(meal){
   const onCode = async code => {
     if (done) return; done = true; stopAll(); if (navigator.vibrate) navigator.vibrate(40);
     status.innerHTML = `<span class="spin"></span><span>Found ${esc(code)} · looking it up…</span>`;
-    try { const item = await lookupBarcode(code); if (item) { openDetail(item, { save: true, meal, back: () => openScanner(meal) }); toast('Product found'); } else { sheet.cleanup = null; openAdd(meal); sheet.data.error = `Barcode ${code} is not in Open Food Facts yet. Search by name${state.aiKey ? ', photograph the label,' : ''} or enter it by hand.`; renderSheet(); } }
+    try { const item = await lookupBarcode(code); if (item) { openDetail(item, { save: true, meal, back: () => openScanner(meal) }); toast('Product found'); } else { sheet.cleanup = null; openAdd(meal); sheet.data.error = `Barcode ${code} is not in Open Food Facts yet. Search by name${aiAvailable() ? ', photograph the label,' : ''} or enter it by hand.`; renderSheet(); } }
     catch { sheet.cleanup = null; openAdd(meal); sheet.data.error = 'Open Food Facts did not answer. Try again in a moment.'; renderSheet(); }
   };
   $('#bcGo', body).onclick = () => { const c = $('#bcIn', body).value.replace(/\D/g, ''); if (c.length < 8) return toast('Barcodes are 8 to 14 digits.'); onCode(c); };
