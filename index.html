@@ -332,6 +332,26 @@ nav.tabs button.on{color:var(--accent);background:var(--accent-soft)}
 .routine .hd2{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .routine .hd2 b{font-size:15px}
 .routine .hd2 small{color:var(--muted);font-size:12px;display:block}
+/* ai */
+.ai{background:linear-gradient(135deg,color-mix(in oklab,var(--accent) 12%,var(--surface)),var(--surface) 70%)}
+.coachhead{display:flex;align-items:flex-start;gap:12px}
+.coachhead .badge{width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,var(--accent2),var(--accent));display:grid;place-items:center;font-size:22px;flex:none;color:var(--accent-ink);box-shadow:0 6px 16px var(--glow)}
+.coachhead h3{margin:0 0 2px;font-size:16px}
+.coachhead p{margin:0;font-size:13px;color:var(--muted)}
+.clist{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+.clist li{display:flex;gap:10px;font-size:14px;line-height:1.4}
+.clist li i{font-style:normal;flex:none;width:22px;height:22px;border-radius:7px;display:grid;place-items:center;font-size:12px;background:var(--surface2)}
+.clist li i.w{background:var(--accent-soft);color:var(--accent)}
+.clist li i.f{background:var(--warn-soft);color:var(--warn)}
+.score{font-family:var(--display);font-size:28px;font-weight:800;letter-spacing:-.03em;color:var(--accent)}
+.score small{font-size:12px;color:var(--muted);font-family:var(--body);font-weight:500;letter-spacing:0}
+.idea{border:1px solid var(--line);border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:6px}
+.idea .top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.idea .top b{font-size:15px}
+.idea .top .k{font-family:var(--display);font-weight:700;white-space:nowrap}
+.idea .items{font-size:13px;color:var(--muted)}
+.idea .why{font-size:12.5px;color:var(--accent)}
+.idea .m{font-size:12px;color:var(--muted)}
 /* photos */
 .pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .pcell{position:relative;aspect-ratio:3/4;border-radius:14px;overflow:hidden;background:var(--surface2);border:1px solid var(--line);padding:0}
@@ -532,7 +552,7 @@ function renderToday(){
       ${[['protein','Protein',tot.p,T.p],['carbs','Carbs',tot.c,T.c],['fat','Fat',tot.f,T.f]].map(([k,l,a,t]) => `
       <div class="macro ${k}"><div class="lab"><span><i></i>${l}</span><span class="num">${Math.round(a/t*100)}%</span></div><b class="num">${r0(a)}<small> / ${t} g</small></b><div class="bar"><div style="width:${Math.min(a/t*100,100)}%"></div></div></div>`).join('')}
     </div>
-    <div class="tools"><button class="btn primary" data-scan><svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 8v8M11 8v8M14 8v8M17 8v8"/></svg>Scan barcode</button><button class="btn" data-add="${defaultMeal()}"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>Search food</button></div>
+    <div class="tools"><button class="btn primary" data-scan><svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 8v8M11 8v8M14 8v8M17 8v8"/></svg>Scan barcode</button><button class="btn" data-add="${defaultMeal()}"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>Search food</button>${aiAvailable() ? `<button class="btn" data-ideas style="flex:0 0 auto">✦ Ideas</button>` : ''}</div>
     ${recent.length ? `<div class="chips">${recent.map(f => `<button class="chip" data-quick="${f.id}">${tileHtml(f)}<span>${esc(f.name)}</span><small class="num">${fmtN(f.cal)}</small></button>`).join('')}</div>` : ''}
     ${MEALS.map(([k,l]) => {
       const es = d.entries.filter(e => e.meal === k); const kc = es.reduce((s2,e) => s2 + e.cal*e.qty, 0);
@@ -550,6 +570,7 @@ function renderToday(){
       <div class="water"><div><h3 style="margin:0">Water</h3><div class="hint" style="margin:2px 0 0">${d.water} of ${waterGoal} glasses · ${isKg ? '250 ml' : '8 oz'} each</div></div><button class="iconbtn" data-water="+1" aria-label="Add a glass" style="font-size:20px">+</button></div>
       <div class="drops" style="margin-top:12px">${Array.from({length: Math.max(waterGoal, d.water)}, (_, i) => `<button class="drop ${i < d.water ? 'on' : ''}" data-water="${i+1}" aria-label="${i+1} glasses"><svg viewBox="0 0 24 24"><path d="M12 2.5c3.5 5 7 8.6 7 12.5a7 7 0 0 1-14 0c0-3.9 3.5-7.5 7-12.5z"/></svg></button>`).join('')}</div>
     </div>
+    ${coachCardHtml()}
     ${last7.length ? `<div class="tiles three"><div class="card"><label>7-day avg</label><b class="num">${fmtN(avg)}</b><small>kcal per logged day</small></div><div class="card"><label>On target</label><b class="num">${under}<span style="font-size:14px;color:var(--muted);font-weight:500"> / ${last7.length}</span></b><small>days this week</small></div><div class="card"><label>Streak</label><b class="num">${streakDays()}</b><small>days logged in a row</small></div></div>` : ''}
     <div class="footer">Product data and photos come from Open Food Facts and USDA FoodData Central. Check the label the first time and save the food; after that it’s one tap.</div>`;
   const prev = state.ringPrev; state.ringPrev = { date: state.date, val: Math.abs(remaining) };
@@ -560,6 +581,9 @@ function renderToday(){
   v.querySelector('[data-go]')?.addEventListener('click', () => go('goals'));
   v.querySelector('[data-weigh]')?.addEventListener('click', () => openWeigh(state.date));
   v.querySelector('[data-scan]').onclick = () => openScanner(defaultMeal());
+  v.querySelector('[data-ideas]')?.addEventListener('click', () => openMealIdeas());
+  v.querySelector('[data-coach]')?.addEventListener('click', () => openCoach(false));
+  v.querySelector('[data-coachview]')?.addEventListener('click', () => openCoach(true));
   v.querySelectorAll('[data-add]').forEach(b => b.onclick = () => openAdd(b.dataset.add));
   v.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => openDetail({ ...state.foods[b.dataset.quick], foodId: b.dataset.quick }, { fromLibrary: true, meal: defaultMeal() }));
   v.querySelectorAll('[data-entry]').forEach(b => b.onclick = () => openEditEntry(b.dataset.entry));
@@ -918,8 +942,8 @@ async function detectGeminiModel(key, signal){
     return cands[0] || 'gemini-2.5-flash';
   } catch (e) { if (e.status === 400 || e.status === 403) throw e; return 'gemini-2.5-flash'; }
 }
-async function geminiLookup(q, imageDataUrl, signal){
-  const parts = [{ text: aiPrompt(q, !!imageDataUrl) }];
+async function geminiJson(prompt, imageDataUrl, signal){
+  const parts = [{ text: prompt }];
   if (imageDataUrl) parts.push({ inline_data: { mime_type: 'image/jpeg', data: imageDataUrl.split(',')[1] } });
   const model = state.gemModel || 'gemini-2.5-flash';
   const r = await fetch(`${GEM}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(state.gemKey)}`, { method: 'POST', signal,
@@ -933,14 +957,16 @@ async function geminiLookup(q, imageDataUrl, signal){
   const s0 = text.indexOf('{'), e2 = text.lastIndexOf('}'); if (s0 < 0 || e2 < 0) throw Object.assign(new Error('nojson'), { nojson: true });
   return JSON.parse(text.slice(s0, e2 + 1));
 }
-async function aiLookup(q, imageDataUrl, signal){
-  if (aiProvider() === 'gemini') return geminiLookup(q, imageDataUrl, signal);
-  return claudeLookup(q, imageDataUrl, signal);
+async function aiJson(prompt, imageDataUrl, signal){
+  if (aiProvider() === 'gemini') return geminiJson(prompt, imageDataUrl, signal);
+  return claudeJson(prompt, imageDataUrl, signal);
 }
-async function claudeLookup(q, imageDataUrl, signal){
+const aiLookup = (q, imageDataUrl, signal) => aiJson(aiPrompt(q, !!imageDataUrl), imageDataUrl, signal);
+function aiErrText(e){ if (e?.name === 'AbortError') return null; return e?.status === 401 || e?.status === 403 ? 'The API key was rejected. Check it under Plan → AI assist.' : e?.status === 429 ? 'Rate limited by the AI provider. Give it a moment.' : e?.refused ? 'The AI declined that request. Try rephrasing.' : e?.nojson || e instanceof SyntaxError ? 'The answer could not be read. Try again.' : `AI request failed${e?.message ? ': ' + e.message : ''}.`; }
+async function claudeJson(prompt, imageDataUrl, signal){
   const content = [];
   if (imageDataUrl) content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: imageDataUrl.split(',')[1] } });
-  content.push({ type: 'text', text: aiPrompt(q, !!imageDataUrl) });
+  content.push({ type: 'text', text: prompt });
   const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', signal,
     headers: { 'content-type': 'application/json', 'x-api-key': state.aiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
     body: JSON.stringify({ model: 'claude-opus-5', max_tokens: 4000, output_config: { effort: 'medium' }, messages: [{ role: 'user', content }] }) });
@@ -1300,7 +1326,7 @@ function renderGym(){
   const prs = prBoard();
   const m = parseD(sel); const mStart = new Date(m.getFullYear(), m.getMonth(), 1); const mDays = new Date(m.getFullYear(), m.getMonth() + 1, 0).getDate(); const lead = (mStart.getDay() + 6) % 7;
   v.innerHTML = `
-    <div class="datenav"><div><h2>Workouts</h2><div class="sub">${tpl.length ? `${doneThisWeek} of ${plannedThisWeek} planned done this week` : 'Build a routine, put it on your days, check it off.'}</div></div><button class="btn primary" data-newtpl>+ Routine</button></div>
+    <div class="datenav"><div><h2>Workouts</h2><div class="sub">${tpl.length ? `${doneThisWeek} of ${plannedThisWeek} planned done this week` : 'Build a routine, put it on your days, check it off.'}</div></div><div style="display:flex;gap:6px">${aiAvailable() ? `<button class="btn" data-airoutine>✦ Build</button>` : ''}<button class="btn primary" data-newtpl>+ Routine</button></div></div>
     <div class="wkgrid">${week.map(ds => { const stt = workoutStatus(ds); const pl = plannedFor(ds); const dn = (state.days[ds]?.workouts) || []; const icons = (pl.length ? pl : dn).map(x => x.emoji || '🏋️').slice(0, 2).join(''); return `<button class="wkday ${ds === sel ? 'on' : ''} ${ds === todayStr() ? 'today' : ''}" data-gd="${ds}"><span>${DOW[parseD(ds).getDay()].slice(0, 2)}</span><div class="ic">${icons || '<span style="color:var(--faint);font-size:12px">rest</span>'}</div><div class="st ${stt}">${stt === 'done' ? '✓' : ''}</div></button>`; }).join('')}</div>
     <div class="card" style="padding:0;overflow:hidden">
       <div class="datenav" style="padding:12px 16px 6px"><div><h3 style="margin:0">${sel === todayStr() ? 'Today' : fmtDate(sel, {weekday:'long'})}</h3><div class="hint" style="margin:2px 0 0">${fmtDate(sel, {month:'long', day:'numeric'})}${sel !== todayStr() ? ` · <button class="link" data-gd="${todayStr()}">Today</button>` : ''}</div></div><button class="link" data-cal>${state.gymCal ? 'Hide calendar' : 'Calendar'}</button></div>
@@ -1327,6 +1353,7 @@ function renderGym(){
   v.querySelectorAll('[data-mon]').forEach(b => b.onclick = () => { const x = parseD(state.gymDate); x.setDate(1); x.setMonth(x.getMonth() + +b.dataset.mon); state.gymDate = dstr(x); renderGym(); });
   v.querySelector('[data-cal]').onclick = () => { state.gymCal = !state.gymCal; renderGym(); };
   v.querySelector('[data-newtpl]').onclick = () => openRoutine(null);
+  v.querySelector('[data-airoutine]')?.addEventListener('click', () => openAiRoutine());
   v.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => openRoutine(b.dataset.edit));
   v.querySelectorAll('[data-assign]').forEach(b => b.onclick = () => { const [tid, dw] = b.dataset.assign.split(':'); const arr = state.gym.plan[dw] || []; state.gym.plan[dw] = arr.includes(tid) ? arr.filter(x => x !== tid) : [...arr, tid]; save(); renderGym(); });
   v.querySelectorAll('[data-toggle]').forEach(b => b.onclick = () => { toggleWorkout(sel, state.gym.templates[b.dataset.toggle]); renderGym(); });
@@ -1418,6 +1445,120 @@ function openPRHistory(ex){
     ${best ? `<div class="tiles"><div class="card flat"><label>Heaviest set</label><b class="num">${fmtW(best.maxW.w).replace('.0','')}</b><small>× ${best.maxW.r} · ${fmtDate(best.maxW.date,{month:'short',day:'numeric'})}</small></div><div class="card flat"><label>Est. 1-rep max</label><b class="num">${fmtW(best.e1rm.e1rm).replace('.0','')}</b><small>from ${fmtW(best.e1rm.w).replace('.0','')} × ${best.e1rm.r}</small></div></div>` : ''}
     <div class="card flat" style="padding:0;overflow:hidden"><div class="list">${Object.entries(byDay).map(([ds, arr]) => `<div class="row" style="grid-template-columns:1fr auto"><div class="t"><b>${fmtDate(ds, {weekday:'short', month:'short', day:'numeric'})}</b><span>${arr.map(st => fmtW(st.w).replace('.0','').replace(/ (lb|kg)/,'') + '×' + st.r).join(' · ')}</span></div><div class="k num">${fmtW(Math.max(...arr.map(st => st.e1rm))).replace('.0','')}<small>est. 1RM</small></div></div>`).join('')}</div></div>
   </div>`);
+}
+
+/* ---------- AI coach, meal ideas, routine builder ---------- */
+function coachCardHtml(){
+  if (!aiAvailable()) return '';
+  let c = null; try { c = JSON.parse(localStorage.getItem('hoxfit:coach') || 'null'); } catch {}
+  const fresh = c && c.date && (parseD(todayStr()) - parseD(c.date)) / 864e5 < 7;
+  return `<div class="card ai"><div class="coachhead"><div class="badge">✦</div><div style="flex:1;min-width:0"><h3>Coach check-in</h3><p>${fresh ? esc(c.result.headline) : 'A weekly read of your food, weight and training with three concrete fixes.'}</p></div></div>
+    <div style="display:flex;gap:8px;margin-top:12px">${fresh ? `<button class="btn primary" data-coachview style="flex:1">See this week’s check-in</button><button class="btn ghost" data-coach>Refresh</button>` : `<button class="btn primary block" data-coach>✦ Run my weekly check-in</button>`}</div></div>`;
+}
+function coachData(){
+  const T = targets(), p = state.profile || {};
+  const days7 = Array.from({length: 7}, (_, i) => addDays(todayStr(), -i)).reverse().map(ds => { const d = state.days[ds]; if (!d) return { date: ds, logged: false }; const t = dayTotals(day(ds)); return { date: ds, logged: !!(d.entries && d.entries.length), kcal: r0(t.cal), protein: r0(t.p), carbs: r0(t.c), fat: r0(t.f), budget: r0(dayBudget(day(ds), T)), workouts: (d.workouts || []).map(w => w.name), plannedWorkouts: plannedFor(ds).map(t2 => t2.name), exerciseKcal: exerciseKcal(day(ds)), water: d.water || 0, weight: d.weight }; });
+  const weights = weightSeries().slice(-30).map(x => ({ date: x.date, lb: r1(x.w) }));
+  return { profile: { sex: p.sex, age: p.age, heightCm: p.heightCm, startLb: p.weightLb, goalLb: p.goalWeightLb, ratePerWeekLb: p.rateLb, activity: p.activity, units: units() }, targets: { kcal: T.cal, protein_g: T.p, carbs_g: T.c, fat_g: T.f, maintenance: T.plan?.tdee }, last7days: days7, weights, prs: prBoard().slice(0, 8).map(b => ({ exercise: b.ex, best: `${r0(b.maxW.w)} lb x ${b.maxW.r}`, e1rm: r0(b.e1rm.e1rm) })) };
+}
+function openCoach(viewOnly){
+  sheet.open = true; sheet.kind = 'coach';
+  let cached = null; try { cached = JSON.parse(localStorage.getItem('hoxfit:coach') || 'null'); } catch {}
+  const show = (res, date) => {
+    const body = mountSheet('Coach check-in', `<div class="detail">
+      <div class="coachhead"><div class="badge">✦</div><div><h3>${esc(res.headline || 'This week')}</h3><p>${fmtDate(date, {weekday:'long', month:'long', day:'numeric'})}${res.score != null ? ` · <span class="score">${r0(res.score)}<small> /100 adherence</small></span>` : ''}</p></div></div>
+      ${Array.isArray(res.wins) && res.wins.length ? `<div class="subh">What went well</div><ul class="clist">${res.wins.map(x => `<li><i class="w">✓</i><span>${esc(x)}</span></li>`).join('')}</ul>` : ''}
+      ${Array.isArray(res.fixes) && res.fixes.length ? `<div class="subh">Fix this week</div><ul class="clist">${res.fixes.map((x, i) => `<li><i class="f">${i + 1}</i><span>${esc(x)}</span></li>`).join('')}</ul>` : ''}
+      ${res.focus ? `<div class="note" style="border-left:3px solid var(--accent)"><b>Focus:</b> ${esc(res.focus)}</div>` : ''}
+      ${res.note ? `<p class="hint" style="margin:0">${esc(res.note)}</p>` : ''}
+      <button class="btn ghost block" id="again">Run it again</button>
+    </div>`);
+    $('#again', body).onclick = () => openCoach(false);
+  };
+  if (viewOnly && cached?.result) return show(cached.result, cached.date);
+  const body = mountSheet('Coach check-in', `<div class="detail"><div class="thinking"><span class="spin"></span><span>Reading your last 7 days…</span></div><div class="skel"></div><div class="skel" style="opacity:.6"></div></div>`);
+  const ctl = new AbortController(); sheet.ctl = ctl;
+  const data = coachData();
+  const prompt = `You are a direct, encouraging fat-loss and strength coach reviewing one client's week. Use ONLY the data below; quote the actual numbers; no generic advice, no medical claims, no shaming. Weights are in lb.
+
+DATA:
+${JSON.stringify(data)}
+
+Reply with ONLY this JSON: {"headline":"one specific sentence, max 14 words","score":0-100 adherence to calorie target and planned workouts,"wins":["2-3 specific things that went well, max 22 words each"],"fixes":["exactly 3 concrete, measurable changes for next week, max 25 words each, e.g. add 30 g protein at breakfast"],"focus":"one sentence: the single most important thing next week","note":"only if something is concerning (e.g. eating far below target, rapid loss), else empty string"}
+If fewer than 3 days were logged, make the first fix about logging consistently and keep the rest gentle.`;
+  aiJson(prompt, null, ctl.signal).then(res => { if (sheet.ctl !== ctl) return; sheet.ctl = null; if (!res || typeof res !== 'object') throw Object.assign(new Error('nojson'), { nojson: true }); try { localStorage.setItem('hoxfit:coach', JSON.stringify({ date: todayStr(), result: res })); } catch {} show(res, todayStr()); if (state.tab === 'today') renderToday(); })
+    .catch(e => { if (sheet.ctl !== ctl) return; sheet.ctl = null; const msg = aiErrText(e); if (!msg) return; body.innerHTML = `<div class="err">${esc(msg)}</div><button class="btn block" id="retry">Try again</button>`; $('#retry', body).onclick = () => openCoach(false); });
+}
+
+function openMealIdeas(){
+  const d = day(state.date), tot = dayTotals(d), T = targets();
+  const rem = { cal: r0(dayBudget(d, T) - tot.cal), p: r0(T.p - tot.p), c: r0(T.c - tot.c), f: r0(T.f - tot.f) };
+  const meal = defaultMeal();
+  sheet.open = true; sheet.kind = 'ideas';
+  let notes = ''; try { notes = localStorage.getItem('hoxfit:ideanotes') || ''; } catch {}
+  const draw = (ideas, err) => {
+    const body = mountSheet('Meal ideas', `<div class="detail">
+      <p class="hint" style="margin:0">Left today: <b class="num" style="color:var(--ink)">${fmtN(Math.max(rem.cal, 0))} kcal</b> · P ${Math.max(rem.p, 0)} g · C ${Math.max(rem.c, 0)} g · F ${Math.max(rem.f, 0)} g. Ideas favor foods you already have saved.</p>
+      <div class="inline"><div class="field"><label>Preferences (optional)</label><input id="pref" value="${esc(notes)}" placeholder="e.g. no dairy, quick, Mediterranean"></div><button class="btn primary" id="gen">${ideas ? 'Again' : '✦ Suggest'}</button></div>
+      ${err ? `<div class="err">${esc(err)}</div>` : ''}
+      ${ideas === 'loading' ? `<div class="thinking"><span class="spin"></span><span>Thinking about ${MEAL_NAME[meal].toLowerCase()}…</span></div><div class="skel"></div><div class="skel" style="opacity:.6"></div>` : ''}
+      ${Array.isArray(ideas) ? ideas.map((it, i) => `<div class="idea"><div class="top"><b>${esc(it.emoji || '🍽️')} ${esc(it.name)}</b><span class="k num">${fmtN(it.cal)} kcal</span></div><div class="m num">P ${r0(it.p)} · C ${r0(it.c)} · F ${r0(it.f)} g</div>${Array.isArray(it.items) ? `<div class="items">${it.items.map(esc).join(' · ')}</div>` : ''}${it.why ? `<div class="why">${esc(it.why)}</div>` : ''}<button class="btn" data-log="${i}" style="align-self:flex-start;padding:8px 12px;font-size:13px">Log to ${MEAL_NAME[meal]}</button></div>`).join('') : ''}
+    </div>`);
+    $('#gen', body).onclick = () => { notes = $('#pref', body).value.trim(); try { localStorage.setItem('hoxfit:ideanotes', notes); } catch {} run(); };
+    body.querySelectorAll('[data-log]').forEach(b => b.onclick = () => { const it = ideas[+b.dataset.log]; openDetail({ name: it.name, brand: '', serving: '1 meal', cal: r1(it.cal), p: r1(it.p), c: r1(it.c), f: r1(it.f), emoji: firstEmoji(it.emoji), source: 'ai', confidence: 'estimate', note: Array.isArray(it.items) ? it.items.join(', ').slice(0, 90) : '' }, { save: false, meal, back: () => draw(ideas) }); });
+  };
+  const run = () => {
+    draw('loading'); const ctl = new AbortController(); sheet.ctl = ctl;
+    const mine = Object.values(state.foods).sort((a, b) => (b.uses || 0) - (a.uses || 0)).slice(0, 40).map(f => `${f.name}${f.brand ? ' (' + f.brand + ')' : ''}: ${r0(f.cal)} kcal, ${r0(f.p)} g protein per ${f.serving}`);
+    const prompt = `Suggest 4 realistic ${MEAL_NAME[meal].toLowerCase()} options for someone losing fat. Remaining for today: ${rem.cal} kcal, protein ${rem.p} g, carbs ${rem.c} g, fat ${rem.f} g. Each option must fit within the remaining calories (if remaining is under 250 kcal suggest light options and say so) and push protein. Prefer building from these foods the user already logs: ${mine.length ? mine.join('; ') : 'none saved yet, use common grocery foods'}. Preferences: ${notes || 'none'}.
+Reply ONLY with JSON: {"ideas":[{"name":"Chicken rice bowl","emoji":"🍗","cal":620,"p":48,"c":60,"f":18,"items":["6 oz grilled chicken breast","1 cup cooked white rice","1/2 cup salsa"],"why":"covers most of your remaining protein"}]}
+Use specific US portions, integer numbers, one emoji, "why" under 12 words.`;
+    aiJson(prompt, null, ctl.signal).then(res => { if (sheet.ctl !== ctl) return; sheet.ctl = null; const ideas = Array.isArray(res?.ideas) ? res.ideas.filter(x => x && x.name && isFinite(+x.cal)).slice(0, 5) : []; if (!ideas.length) return draw(null, 'No ideas came back. Try again or add a preference.'); draw(ideas); })
+      .catch(e => { if (sheet.ctl !== ctl) return; sheet.ctl = null; const msg = aiErrText(e); if (msg) draw(null, msg); });
+  };
+  draw(null);
+}
+
+function openAiRoutine(){
+  sheet.open = true; sheet.kind = 'airoutine';
+  let o = { goal: 'lose fat and keep muscle', days: [1, 3, 5], equip: 'full commercial gym', exp: 'intermediate', mins: 45, notes: '' };
+  try { o = { ...o, ...(JSON.parse(localStorage.getItem('hoxfit:airoutine') || '{}')) }; } catch {}
+  const draw = (result, err) => {
+    const body = mountSheet('Build a routine', `<div class="detail">
+      ${result ? '' : `<div class="grid2">
+        <div class="field"><label>Goal</label><select id="goal">${['lose fat and keep muscle','build muscle','general fitness and conditioning','strength (powerlifting style)'].map(g => `<option ${o.goal === g ? 'selected' : ''}>${g}</option>`).join('')}</select></div>
+        <div class="field"><label>Experience</label><select id="exp">${['beginner','intermediate','advanced'].map(g => `<option ${o.exp === g ? 'selected' : ''}>${g}</option>`).join('')}</select></div>
+      </div>
+      <div class="field"><label>Training days</label><div class="daychips">${[1,2,3,4,5,6,0].map(dw => `<button data-d="${dw}" class="${o.days.includes(dw) ? 'on' : ''}">${DOW[dw]}</button>`).join('')}</div></div>
+      <div class="grid2">
+        <div class="field"><label>Equipment</label><select id="equip">${['full commercial gym','home gym: barbell, rack, dumbbells','dumbbells only','bodyweight only'].map(g => `<option ${o.equip === g ? 'selected' : ''}>${g}</option>`).join('')}</select></div>
+        <div class="field"><label>Minutes per session</label><input id="mins" type="number" inputmode="numeric" value="${o.mins}"></div>
+      </div>
+      <div class="field"><label>Anything else (injuries, favorites, what to avoid)</label><input id="notes" value="${esc(o.notes)}" placeholder="e.g. bad shoulder, love deadlifts"></div>
+      ${err ? `<div class="err">${esc(err)}</div>` : ''}
+      <button class="btn primary block" id="gen">✦ Generate my plan</button>`}
+      ${result === 'loading' ? `<div class="thinking"><span class="spin"></span><span>Designing your week…</span></div><div class="skel"></div><div class="skel" style="opacity:.6"></div>` : ''}
+      ${Array.isArray(result) ? `<p class="hint" style="margin:0">Here’s the plan. Add it and tweak anything later under My routines.</p>${result.map(r => `<div class="routine" style="border:1px solid var(--line);border-radius:16px;padding:12px"><div class="hd2"><div><b>${esc(r.emoji)} ${esc(r.name)}</b><small>${r.days.map(dw => DOW[dw]).join(', ')} · ~${r.minutes} min</small></div></div><div style="font-size:13px;color:var(--muted)">${r.exercises.map(e => `${esc(e.name)} ${e.sets}×${e.reps}`).join(' · ')}</div></div>`).join('')}
+        <div style="display:flex;gap:8px"><button class="btn ghost" id="redo">Redo</button><button class="btn primary" id="add" style="flex:1">Add to my schedule</button></div>` : ''}
+    </div>`);
+    body.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { const dw = +b.dataset.d; o.days = o.days.includes(dw) ? o.days.filter(x => x !== dw) : [...o.days, dw]; b.classList.toggle('on'); });
+    $('#gen', body)?.addEventListener('click', () => { o.goal = $('#goal', body).value; o.exp = $('#exp', body).value; o.equip = $('#equip', body).value; o.mins = parseInt($('#mins', body).value) || 45; o.notes = $('#notes', body).value.trim(); if (!o.days.length) return toast('Pick at least one training day.'); try { localStorage.setItem('hoxfit:airoutine', JSON.stringify(o)); } catch {} run(); });
+    $('#redo', body)?.addEventListener('click', () => draw(null));
+    $('#add', body)?.addEventListener('click', () => { for (const r of result) { const id = uid('t_'); state.gym.templates[id] = { id, name: r.name, emoji: r.emoji, type: r.type, minutes: r.minutes, exercises: r.exercises.map(e => ({ id: uid('e_'), name: e.name, sets: e.sets, reps: e.reps })) }; for (const dw of r.days) { const arr = state.gym.plan[dw] || []; if (!arr.includes(id)) state.gym.plan[dw] = [...arr, id]; } } save(); closeSheet(); toast(`Added ${result.length} routine${result.length === 1 ? '' : 's'} to your week`); render(); });
+  };
+  const run = () => {
+    draw('loading'); const ctl = new AbortController(); sheet.ctl = ctl;
+    const prompt = `You are an experienced strength coach. Design a weekly training plan.
+Client: goal ${o.goal}; experience ${o.exp}; bodyweight ${fmtW(latestWeight())}; equipment: ${o.equip}; ${o.days.length} sessions per week on these days (0=Sunday..6=Saturday): [${o.days.join(', ')}]; about ${o.mins} minutes per session; notes: ${o.notes || 'none'}.
+Reply ONLY with JSON: {"routines":[{"name":"Upper body","emoji":"🏋️","days":[1,4],"minutes":45,"type":3,"exercises":[{"name":"Barbell bench press","sets":4,"reps":8}]}]}
+Rules: cover every listed day exactly once (a routine may repeat on several days); 4-7 exercises per session sized to the minutes; compound lifts first; use plain gym names; "reps" is one integer (the bottom of the range); "type" is the calorie-estimate category index: ${EXERCISES.map((e, i) => `${i}=${e[0]}`).join(', ')} (use 3 for lifting, 4 for circuits/HIIT); one emoji per routine; give routines short distinct names.`;
+    aiJson(prompt, null, ctl.signal).then(res => { if (sheet.ctl !== ctl) return; sheet.ctl = null;
+      const routines = (Array.isArray(res?.routines) ? res.routines : []).map(r => ({ name: String(r.name || 'Workout').slice(0, 40), emoji: firstEmoji(r.emoji || '🏋️'), days: (Array.isArray(r.days) ? r.days : []).map(Number).filter(x => x >= 0 && x <= 6 && o.days.includes(x)), minutes: parseInt(r.minutes) || o.mins, type: Number.isInteger(r.type) && EXERCISES[r.type] ? r.type : 3, exercises: (Array.isArray(r.exercises) ? r.exercises : []).filter(e => e && e.name).map(e => ({ name: String(e.name).slice(0, 50), sets: parseInt(e.sets) || 3, reps: parseInt(e.reps) || 8 })) })).filter(r => r.exercises.length);
+      if (!routines.length) return draw(null, 'The plan came back empty. Try again.');
+      draw(routines); })
+      .catch(e => { if (sheet.ctl !== ctl) return; sheet.ctl = null; const msg = aiErrText(e); if (msg) draw(null, msg); });
+  };
+  draw(null);
 }
 
 /* ---------- shell ---------- */
