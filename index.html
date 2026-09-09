@@ -360,6 +360,14 @@ nav.tabs button.on{color:var(--accent);background:var(--accent-soft)}
 .quick button{font-size:12.5px;padding:7px 11px;border-radius:999px;background:var(--surface2);font-weight:600;color:var(--muted)}
 .quick button.on{background:var(--accent-soft);color:var(--accent)}
 .eq{font-size:12.5px;color:var(--muted);text-align:right;margin-top:-6px}
+/* sync */
+.syncstat{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.syncstat i{width:9px;height:9px;border-radius:50%;background:var(--faint);display:inline-block;flex:none}
+.syncstat i.ok{background:var(--good)}
+.syncstat i.busy{background:var(--carbs);animation:pulse 1s infinite alternate}
+.syncstat i.err{background:var(--warn)}
+@keyframes pulse{from{opacity:.4}to{opacity:1}}
+.warnbar{background:var(--warn-soft);color:var(--warn);border-radius:16px;padding:12px 14px;font-size:13.5px;display:flex;gap:10px;align-items:center;justify-content:space-between}
 /* photos */
 .pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .pcell{position:relative;aspect-ratio:3/4;border-radius:14px;overflow:hidden;background:var(--surface2);border:1px solid var(--line);padding:0}
@@ -449,14 +457,14 @@ const DENSITY = [['honey',1.42],['maple syrup',1.32],['olive oil',0.91],['peanut
 const densityFor = name => { const n = String(name || '').toLowerCase(); const hit = DENSITY.find(([k]) => n.includes(k)); return hit ? hit[1] : null; };
 const GENERIC_ITEMS = GENERIC.map(([name,emoji,cal,p,c,f,serving,g]) => ({ name, brand: '', emoji, serving, servingGrams: g, per100: {cal,p,c,f}, density: densityFor(name), cal: r1(cal*g/100), p: r1(p*g/100), c: r1(c*g/100), f: r1(f*g/100), source: 'generic', confidence: 'generic', note: 'USDA-based generic value' }));
 
-const state = { profile: null, foods: {}, days: {}, date: todayStr(), tab: 'today', aiKey: null, usdaKey: null, theme: 'system', ringPrev: null, gym: { templates: {}, plan: {} }, photos: [], gymDate: todayStr(), gymCal: false, gemKey: null, gemModel: null, aiProvider: null };
+const state = { profile: null, foods: {}, days: {}, date: todayStr(), tab: 'today', aiKey: null, usdaKey: null, theme: 'system', ringPrev: null, sync: { token: null, gistId: null, lastPush: 0, lastPull: 0, status: 'off', error: null }, gym: { templates: {}, plan: {} }, photos: [], gymDate: todayStr(), gymCal: false, gemKey: null, gemModel: null, aiProvider: null };
 const EXERCISES = [['Walking',3.5,'🚶'],['Running',9.8,'🏃'],['Cycling',7.5,'🚴'],['Lifting',6,'🏋️'],['HIIT',8,'🔥'],['Swimming',7,'🏊'],['Hiking',6,'🥾'],['Sports',6.5,'🏀'],['Yoga',2.5,'🧘'],['Other',5,'⚡']];
 
 /* ---------- storage ---------- */
-function load(){ try { const j = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); state.profile = j.profile || null; state.foods = j.foods || {}; state.days = j.days || {}; state.gym = j.gym || { templates: {}, plan: {} }; } catch {} if (!state.gym) state.gym = { templates: {}, plan: {} }; try { state.aiKey = localStorage.getItem(LS_AI) || null; state.usdaKey = localStorage.getItem(LS_USDA) || null; state.theme = localStorage.getItem('hoxfit:theme') || 'system'; state.gemKey = localStorage.getItem(LS_GEM) || null; state.gemModel = localStorage.getItem(LS_GEMMODEL) || null; state.aiProvider = localStorage.getItem(LS_PROV) || null; } catch {} }
+function load(){ try { const j = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); state.profile = j.profile || null; state.foods = j.foods || {}; state.days = j.days || {}; state.gym = j.gym || { templates: {}, plan: {} }; } catch {} if (!state.gym) state.gym = { templates: {}, plan: {} }; try { state.aiKey = localStorage.getItem(LS_AI) || null; state.usdaKey = localStorage.getItem(LS_USDA) || null; state.theme = localStorage.getItem('hoxfit:theme') || 'system'; state.gemKey = localStorage.getItem(LS_GEM) || null; state.gemModel = localStorage.getItem(LS_GEMMODEL) || null; state.aiProvider = localStorage.getItem(LS_PROV) || null; const sy = JSON.parse(localStorage.getItem('hoxfit:sync') || 'null'); if (sy && sy.token) state.sync = { ...state.sync, ...sy, status: 'idle', error: null }; } catch {} }
 const aiProvider = () => (state.aiProvider === 'gemini' && state.gemKey) ? 'gemini' : (state.aiProvider === 'anthropic' && state.aiKey) ? 'anthropic' : state.gemKey ? 'gemini' : state.aiKey ? 'anthropic' : null;
 const aiAvailable = () => !!aiProvider();
-function save(){ try { localStorage.setItem(LS_KEY, JSON.stringify({ profile: state.profile, foods: state.foods, days: state.days, gym: state.gym, v: 4, savedAt: Date.now() })); } catch (e) { toast('Could not save. Storage may be full or blocked.'); } }
+function save(){ state.savedAt = Date.now(); try { localStorage.setItem(LS_KEY, JSON.stringify({ profile: state.profile, foods: state.foods, days: state.days, gym: state.gym, v: 4, savedAt: state.savedAt })); } catch (e) { toast('Could not save. Storage may be full or blocked.'); } scheduleSync(); }
 const persistProfile = () => save(), persistFood = () => save(), persistDay = () => save();
 
 /* ---------- plan math ---------- */
@@ -533,7 +541,7 @@ function renderToday(){
   const last7 = Array.from({length: 7}, (_, i) => addDays(todayStr(), -i)).map(ds => state.days[ds]).filter(x => x && x.entries && x.entries.length);
   const avg = last7.length ? last7.reduce((s2, x) => s2 + dayTotals(x).cal, 0) / last7.length : 0;
   const under = last7.filter(x => dayTotals(x).cal <= dayBudget(day(x.date), T)).length;
-  const banner = !state.profile ? `<div class="banner"><span><b>Welcome.</b> Set up your plan so your calorie target fits you, not a default.</span><button class="btn primary" data-go="goals">Set up</button></div>` : '';
+  const banner = !state.profile ? `<div class="banner"><span><b>Welcome.</b> Set up your plan so your calorie target fits you, not a default.</span><button class="btn primary" data-go="goals">Set up</button></div>` : (!state.sync.token && Object.values(state.days).length >= 2 && !state.dismissSync ? `<div class="warnbar"><span>Your log lives only on this device. Turn on sync so it survives a reinstall.</span><span style="display:flex;gap:6px"><button class="btn primary" data-go="goals" style="padding:8px 12px;font-size:13px">Set up</button><button class="iconbtn" data-dismiss aria-label="Dismiss" style="width:34px;height:34px">✕</button></span></div>` : '');
   v.innerHTML = `
     ${banner}
     <div class="datenav">
@@ -589,6 +597,7 @@ function renderToday(){
   v.querySelectorAll('[data-goday]').forEach(b => b.onclick = () => { state.date = b.dataset.goday; render(); });
   v.querySelector('[data-today]')?.addEventListener('click', () => { state.date = todayStr(); render(); });
   v.querySelector('[data-go]')?.addEventListener('click', () => go('goals'));
+  v.querySelector('[data-dismiss]')?.addEventListener('click', () => { state.dismissSync = true; renderToday(); });
   v.querySelector('[data-weigh]')?.addEventListener('click', () => openWeigh(state.date));
   v.querySelector('[data-scan]').onclick = () => openScanner(defaultMeal());
   v.querySelector('[data-ideas]')?.addEventListener('click', () => openMealIdeas());
@@ -774,9 +783,18 @@ function renderGoals(){
       ${state.gemKey ? `<div class="inline" style="margin-top:10px"><div class="field"><label>Gemini model (auto-detected; change if you like)</label><input id="gemModel" autocomplete="off" value="${esc(state.gemModel || 'gemini-2.5-flash')}"></div><button class="btn ghost" id="saveGemModel">Set</button></div>` : ''}
       <div class="inline" style="margin-top:10px"><div class="field"><label>Anthropic API key</label><input id="aiKey" type="password" autocomplete="off" placeholder="sk-ant-…" value="${esc(state.aiKey||'')}"></div><button class="btn" id="saveKey">${state.aiKey ? 'Update' : 'Save key'}</button>${state.aiKey ? '<button class="btn ghost" id="clearKey">Remove</button>' : ''}</div>
     </div>
+    <div class="card ${state.sync.token ? '' : 'ai'}">
+      <h3>Sync & backup</h3>
+      ${state.sync.token ? `<div class="syncstat"><i class="${state.sync.status === 'error' ? 'err' : state.sync.status === 'busy' ? 'busy' : 'ok'}"></i><span>${state.sync.status === 'error' ? esc(state.sync.error || 'Sync error') : state.sync.status === 'busy' ? 'Syncing…' : `Synced to your GitHub account${state.sync.lastPush || state.sync.lastPull ? ' · ' + new Date(Math.max(state.sync.lastPush, state.sync.lastPull)).toLocaleString(undefined, {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'}) : ''}`}</span></div>
+        <p class="hint" style="margin:10px 0">Every change is saved to a private gist in your GitHub account within a few seconds. Open the app on any device, paste the same token, and your history comes back. Photos stay on the device; export a backup to carry those.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="syncNow">Sync now</button><a class="btn ghost" href="https://gist.github.com/${esc(state.sync.gistId || '')}" target="_blank" rel="noopener" style="text-decoration:none">View on GitHub</a><button class="btn ghost" id="syncOff">Turn off</button></div>`
+      : `<p class="hint">Right now your log exists only in this browser. Deleting the home-screen app, clearing Safari, or switching phones loses it. Sync keeps a private copy in your GitHub account and restores it on any device.</p>
+        <ol class="hint" style="margin:0 0 10px;padding-left:18px;line-height:1.6"><li>Open <a href="https://github.com/settings/tokens/new?scopes=gist&description=HoxFit%20sync" target="_blank" rel="noopener">github.com/settings/tokens/new</a> (the gist box is pre-ticked), set expiration to <b>No expiration</b>, tap Generate.</li><li>Copy the token and paste it here.</li></ol>
+        <div class="inline"><div class="field"><label>GitHub token</label><input id="syncTok" type="password" autocomplete="off" placeholder="ghp_… or github_pat_…"></div><button class="btn primary" id="syncOn">Connect</button></div>`}
+    </div>
     <div class="card">
       <h3>Your data</h3>
-      <p class="hint">Everything lives in this browser on this device: ${Object.keys(state.foods).length} foods · ${nDays} logged days · ${weightSeries().length} weigh-ins · ${state.photos.length} photos · ${Object.keys(state.gym.templates).length} routines. Backups include your photos. Export a backup now and then, and import it on another device to carry your history over.</p>
+      <p class="hint">${state.sync.token ? 'Synced to GitHub and kept on this device' : 'On this device'}: ${Object.keys(state.foods).length} foods · ${nDays} logged days · ${weightSeries().length} weigh-ins · ${state.photos.length} photos · ${Object.keys(state.gym.templates).length} routines. Backups include your photos. Export a backup now and then, and import it on another device to carry your history over.</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="exportJson">Export backup</button><label class="btn ghost" style="cursor:pointer">Import backup<input type="file" id="importJson" accept="application/json,.json" hidden></label><button class="btn danger" id="resetAll">Erase all data</button></div>
     </div>`;
   const setD = (k, val) => { draft[k] = val; renderGoals(); };
@@ -822,7 +840,12 @@ function renderGoals(){
   $('#saveGemModel')?.addEventListener('click', () => { const m = $('#gemModel').value.trim(); if (!m) return; state.gemModel = m; try { localStorage.setItem(LS_GEMMODEL, m); } catch {} toast(`Using ${m}`); renderGoals(); });
   v.querySelectorAll('[data-prov]').forEach(b => b.onclick = () => { state.aiProvider = b.dataset.prov; try { localStorage.setItem(LS_PROV, state.aiProvider); } catch {} renderGoals(); });
   $('#clearKey')?.addEventListener('click', () => { state.aiKey = null; try { localStorage.removeItem(LS_AI); } catch {} toast('Key removed.'); renderGoals(); });
-  $('#exportJson').onclick = async () => { let photos = []; try { photos = await idb.all(); } catch {} const blob = new Blob([JSON.stringify({ profile: state.profile, foods: state.foods, days: state.days, gym: state.gym, photos, v: 4, exportedAt: new Date().toISOString() }, null, 1)], {type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `hoxfit-backup-${todayStr()}.json`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); toast('Backup downloaded.'); };
+  $('#exportJson').onclick = async () => { let photos = []; try { photos = await idb.all(); } catch {} const json = JSON.stringify({ profile: state.profile, foods: state.foods, days: state.days, gym: state.gym, photos, v: 4, exportedAt: new Date().toISOString() }, null, 1); const name = `hoxfit-backup-${todayStr()}.json`; const file = new File([json], name, { type: 'application/json' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: 'HoxFit backup' }); toast('Backup shared. Save it to Files or iCloud Drive.'); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); toast('Backup downloaded.'); };
+  $('#syncOn')?.addEventListener('click', async () => { const tok = $('#syncTok').value.trim(); if (tok.length < 20) return toast('Paste the token first.'); const btn = $('#syncOn'); btn.disabled = true; btn.textContent = 'Connecting…'; try { await syncConnect(tok); toast('Sync is on.'); } catch (e) { toast(e.status === 401 ? 'GitHub rejected that token.' : e.status === 403 || e.status === 404 ? 'That token has no gist permission. Create one with the gist box ticked.' : 'Could not reach GitHub. Try again.'); } renderGoals(); });
+  $('#syncNow')?.addEventListener('click', async () => { await syncPull(true); await syncPush(true); renderGoals(); });
+  $('#syncOff')?.addEventListener('click', () => { if (!confirm('Turn off sync on this device? The copy in your GitHub account is kept.')) return; state.sync = { token: null, gistId: null, lastPush: 0, lastPull: 0, status: 'off', error: null }; try { localStorage.removeItem('hoxfit:sync'); } catch {} renderGoals(); });
   $('#importJson').onchange = async e => {
     const f = e.target.files?.[0]; if (!f) return;
     try { const j = JSON.parse(await f.text()); if (!j || typeof j !== 'object' || (!j.profile && !j.foods && !j.days)) throw 0;
@@ -1562,6 +1585,63 @@ Rules: cover every listed day exactly once (a routine may repeat on several days
   draw(null);
 }
 
+/* ---------- sync (private GitHub gist) ---------- */
+const GH = 'https://api.github.com', SYNC_FILE = 'hoxfit-data.json', SYNC_DESC = 'HoxFit sync';
+function saveSyncMeta(){ try { localStorage.setItem('hoxfit:sync', JSON.stringify({ token: state.sync.token, gistId: state.sync.gistId, lastPush: state.sync.lastPush, lastPull: state.sync.lastPull })); } catch {} }
+async function gh(method, path, body){
+  const r = await fetch(GH + path, { method, headers: { 'Authorization': 'Bearer ' + state.sync.token, 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
+  if (!r.ok) { const e = new Error('github ' + r.status); e.status = r.status; throw e; }
+  return r.status === 204 ? null : r.json();
+}
+const syncPayload = () => ({ profile: state.profile, foods: state.foods, days: state.days, gym: state.gym, v: 4, savedAt: state.savedAt || Date.now(), device: navigator.userAgent.slice(0, 40) });
+async function syncConnect(token){
+  state.sync = { ...state.sync, token, status: 'busy', error: null };
+  let gists = []; try { gists = await gh('GET', '/gists?per_page=100'); } catch (e) { state.sync = { ...state.sync, token: null, status: 'off' }; throw e; }
+  const mine = (gists || []).find(g => g.description === SYNC_DESC && g.files && g.files[SYNC_FILE]);
+  if (mine) { state.sync.gistId = mine.id; saveSyncMeta(); await syncPull(true); await syncPush(true); }
+  else { const g = await gh('POST', '/gists', { description: SYNC_DESC, public: false, files: { [SYNC_FILE]: { content: JSON.stringify(syncPayload()) } } }); state.sync.gistId = g.id; state.sync.lastPush = Date.now(); state.sync.status = 'idle'; saveSyncMeta(); }
+  render();
+}
+function mergeRemote(remote){
+  const localAt = state.savedAt || 0, remoteAt = remote.savedAt || 0;
+  const remoteNewer = remoteAt > localAt;
+  const localEmpty = !state.profile && !Object.keys(state.days).length && !Object.keys(state.foods).length;
+  if (localEmpty || remoteNewer) { if (remote.profile) state.profile = remote.profile; if (remote.gym) state.gym = remote.gym; }
+  // union of days and foods; on a key present in both, the newer document wins
+  const days = { ...(remoteNewer ? state.days : remote.days || {}), ...(remoteNewer ? remote.days || {} : state.days) };
+  const foods = { ...(remoteNewer ? state.foods : remote.foods || {}), ...(remoteNewer ? remote.foods || {} : state.foods) };
+  state.days = days; state.foods = foods;
+  if (!state.gym) state.gym = { templates: {}, plan: {} };
+  try { localStorage.setItem(LS_KEY, JSON.stringify({ profile: state.profile, foods: state.foods, days: state.days, gym: state.gym, v: 4, savedAt: Math.max(localAt, remoteAt) })); } catch {}
+  state.savedAt = Math.max(localAt, remoteAt);
+}
+async function syncPull(manual){
+  if (!state.sync.token || !state.sync.gistId) return;
+  state.sync.status = 'busy';
+  try {
+    const g = await gh('GET', `/gists/${state.sync.gistId}`);
+    const f = g.files && g.files[SYNC_FILE]; if (!f) throw new Error('missing file');
+    let text = f.content; if (f.truncated && f.raw_url) { const r = await fetch(f.raw_url); text = await r.text(); }
+    const remote = JSON.parse(text);
+    if (remote && typeof remote === 'object') { mergeRemote(remote); state.sync.lastPull = Date.now(); }
+    state.sync.status = 'idle'; state.sync.error = null; saveSyncMeta(); render();
+  } catch (e) { state.sync.status = 'error'; state.sync.error = e.status === 401 ? 'GitHub rejected the token. Reconnect under Plan.' : e.status === 404 ? 'The sync gist was deleted. Turn sync off and on to recreate it.' : 'Could not reach GitHub.'; if (manual) toast(state.sync.error); }
+}
+let syncT = null, syncing = false, syncDirty = false;
+function scheduleSync(){ if (!state.sync.token || !state.sync.gistId) return; syncDirty = true; clearTimeout(syncT); syncT = setTimeout(() => syncPush(false), 2500); }
+async function syncPush(manual){
+  if (!state.sync.token || !state.sync.gistId) return;
+  if (syncing) { syncDirty = true; return; }
+  syncing = true; syncDirty = false; state.sync.status = 'busy'; if (state.tab === 'goals') { const el = $('#view-goals .syncstat i'); if (el) el.className = 'busy'; }
+  try { await gh('PATCH', `/gists/${state.sync.gistId}`, { files: { [SYNC_FILE]: { content: JSON.stringify(syncPayload()) } } }); state.sync.lastPush = Date.now(); state.sync.status = 'idle'; state.sync.error = null; saveSyncMeta(); }
+  catch (e) { state.sync.status = 'error'; state.sync.error = e.status === 401 ? 'GitHub rejected the token. Reconnect under Plan.' : e.status === 404 ? 'The sync gist was deleted. Turn sync off and on to recreate it.' : 'Could not reach GitHub. Will retry on the next change.'; if (manual) toast(state.sync.error); }
+  syncing = false;
+  if (state.tab === 'goals') renderGoals();
+  if (syncDirty) scheduleSync();
+}
+window.addEventListener('online', () => { if (syncDirty) scheduleSync(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && state.sync.token) syncPull(false); });
+
 /* ---------- shell ---------- */
 function go(tab){ state.tab = tab; try { localStorage.setItem('hoxfit:tab', tab); } catch {} render(); window.scrollTo({ top: 0 }); }
 document.querySelectorAll('nav.tabs button').forEach(b => b.onclick = () => go(b.dataset.tab));
@@ -1569,7 +1649,8 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheet.open
 let toastT; function toast(msg){ const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2600); }
 let rs; window.addEventListener('resize', () => { clearTimeout(rs); rs = setTimeout(() => { if (state.tab === 'weight') renderWeight(); }, 150); });
 
-load(); applyTheme(); loadPhotos().then(() => { if (state.tab === 'weight' || state.tab === 'gym') render(); });
+load(); applyTheme(); try { state.savedAt = JSON.parse(localStorage.getItem(LS_KEY) || '{}').savedAt || 0; } catch {} loadPhotos().then(() => { if (state.tab === 'weight' || state.tab === 'gym') render(); });
+if (state.sync.token && state.sync.gistId) syncPull(false);
 try { const t = localStorage.getItem('hoxfit:tab'); if (t && ['today','foods','gym','weight','goals'].includes(t)) state.tab = t; } catch {}
 if (!state.profile) state.tab = 'goals';
 render();
