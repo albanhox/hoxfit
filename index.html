@@ -64,7 +64,7 @@ a{color:var(--accent)}
 header.top{position:sticky;top:0;z-index:5;background:color-mix(in oklab,var(--bg) 82%,transparent);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2);padding:calc(12px + env(safe-area-inset-top)) 18px 10px;display:flex;align-items:center;justify-content:space-between;gap:12px}
 .brand{font-family:var(--display);font-weight:800;font-size:22px;letter-spacing:-.03em;display:flex;align-items:baseline;gap:8px}
 .brand small{font-family:var(--body);font-weight:500;font-size:12px;color:var(--muted);letter-spacing:.02em}
-.brand .dot{width:9px;height:9px;border-radius:50%;background:linear-gradient(135deg,var(--accent2),var(--accent));display:inline-block;align-self:center;box-shadow:0 0 0 4px var(--glow)}
+.brand .mark{width:26px;height:26px;border-radius:7px;align-self:center;box-shadow:0 4px 10px var(--glow)}
 .streak{font-size:12px;font-weight:600;color:var(--ink);background:var(--surface);border:1px solid var(--line);padding:6px 10px;border-radius:999px;display:flex;align-items:center;gap:6px;box-shadow:var(--shadow-sm)}
 .streak:empty{display:none}
 main{padding:0 14px;display:flex;flex-direction:column;gap:16px}
@@ -378,7 +378,7 @@ nav.tabs button.on{color:var(--accent);background:var(--accent-soft)}
 <body>
 <div id="app">
   <header class="top">
-    <div class="brand"><span class="dot"></span>HoxFit <small id="brandSub"></small></div>
+    <div class="brand"><svg class="mark" viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="114" fill="var(--accent)"/><circle cx="256" cy="256" r="150" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="44"/><path d="M256 106 A150 150 0 1 1 106 256" fill="none" stroke="var(--accent-ink)" stroke-width="44" stroke-linecap="round"/><path d="M150 318 L212 262 L256 296 L318 214 L362 186" fill="none" stroke="#F7C15B" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/><circle cx="362" cy="186" r="26" fill="#FFF2C9"/></svg>HoxFit <small id="brandSub"></small></div>
     <div class="streak" id="streak"></div>
   </header>
   <main>
