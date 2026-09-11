@@ -332,6 +332,26 @@ nav.tabs button.on{color:var(--accent);background:var(--accent-soft)}
 .routine .hd2{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .routine .hd2 b{font-size:15px}
 .routine .hd2 small{color:var(--muted);font-size:12px;display:block}
+/* ai exercise swap */
+.exname{position:relative;min-width:0}
+.exname input{padding-right:38px}
+.swapbtn{width:30px;height:30px;border-radius:9px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-size:17px;font-weight:700;line-height:1;flex:none;transition:transform .16s var(--ease),background .16s}
+.swapbtn:active{transform:scale(.92)}
+.exname .swapbtn{position:absolute;right:4px;top:50%;transform:translateY(-50%)}
+.exname .swapbtn:active{transform:translateY(-50%) scale(.92)}
+.swapbtn.on{background:linear-gradient(135deg,var(--accent2),var(--accent));color:var(--accent-ink)}
+.swappanel{display:flex;flex-direction:column;gap:10px;padding:12px;border-radius:14px;background:var(--bg);border:1px solid var(--line);margin:2px 0 4px}
+.swapopts{display:flex;flex-direction:column;gap:6px}
+.swapopt{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:10px 12px;border-radius:12px;background:var(--surface);border:1px solid var(--line);width:100%;transition:transform .16s var(--ease)}
+.swapopt:active{transform:scale(.98)}
+.swapopt b{font-size:14px}
+.swapopt small{font-size:12px;color:var(--muted)}
+.swaptog{align-self:flex-start;padding:6px 11px;border-radius:999px;background:var(--surface2);font-size:12.5px;font-weight:600;color:var(--muted)}
+.swaptog.on{background:var(--accent-soft);color:var(--accent)}
+.swaprow{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13.5px;padding:3px 0}
+.swaprow small{color:var(--muted)}
+.avoidchips{display:flex;gap:4px;flex-wrap:wrap}
+.avoidchips button{padding:6px 10px;border-radius:9px;background:var(--surface2);font-size:12px;font-weight:600;color:var(--muted)}
 /* ai */
 .ai{background:linear-gradient(135deg,color-mix(in oklab,var(--accent) 12%,var(--surface)),var(--surface) 70%)}
 .coachhead{display:flex;align-items:flex-start;gap:12px}
@@ -1399,26 +1419,85 @@ function openAdhoc(ds){
   $('#ok', body).onclick = () => { const n = $('#nm', body).value.trim(); if (!n) return toast('Give it a name.'); const w = toggleWorkout(ds, null, n); closeSheet(); toast('Logged'); render(); };
 }
 
+/* ---------- AI exercise swap ---------- */
+const LS_AVOID = 'hoxfit:avoidex';
+function avoidList(){ try { const a = JSON.parse(localStorage.getItem(LS_AVOID) || '[]'); return Array.isArray(a) ? a.filter(x => typeof x === 'string' && x.trim()) : []; } catch { return []; } }
+function setAvoidList(a){ const seen = new Set(), out = []; for (const x of a) { const n = String(x || '').trim(); if (n && !seen.has(n.toLowerCase())) { seen.add(n.toLowerCase()); out.push(n); } } try { localStorage.setItem(LS_AVOID, JSON.stringify(out.slice(-60))); } catch {} }
+function aiPrefs(){ let o = { equip: 'full commercial gym', exp: 'intermediate', notes: '' }; try { o = { ...o, ...(JSON.parse(localStorage.getItem('hoxfit:airoutine') || '{}')) }; } catch {} return o; }
+function swapExerciseAi(ctx, signal){
+  const o = aiPrefs(); const ex = ctx.exercise; const avoid = avoidList().filter(n => n.toLowerCase() !== ex.name.toLowerCase());
+  const prompt = `You are an experienced strength coach. A client wants to replace one exercise in their routine with something they will like better.
+Routine "${ctx.routine || 'Workout'}"; equipment: ${o.equip}; experience: ${o.exp}; bodyweight ${fmtW(latestWeight())}; notes: ${o.notes || 'none'}.
+Other exercises in this routine: ${ctx.others.map(e => `${e.name} ${e.sets || 3}×${e.reps || 8}`).join('; ') || 'none'}.
+Replace: "${ex.name}" (${ex.sets || 3}×${ex.reps || 8}). Reason: ${ctx.reason || 'the client does not like this exercise'}.
+${avoid.length ? `The client also avoids these, never suggest them: ${avoid.join('; ')}.` : ''}
+Reply ONLY with JSON: {"options":[{"name":"Dumbbell bench press","sets":4,"reps":8,"why":"same chest push, easier on the shoulders"}]}
+Rules: exactly 3 options, best first; each trains the same muscles and movement pattern as the replaced exercise; doable with the equipment; not already in the routine and not a trivial variation of the replaced exercise; plain gym names; "sets" and "reps" are integers (reps is the bottom of the range); "why" under 10 words.`;
+  return aiJson(prompt, null, signal).then(res => {
+    const opts = (Array.isArray(res?.options) ? res.options : []).filter(x => x && x.name).map(x => ({ name: String(x.name).trim().slice(0, 50), sets: parseInt(x.sets) || ex.sets || 3, reps: parseInt(x.reps) || ex.reps || 8, why: String(x.why || '').trim().slice(0, 80) })).filter(x => x.name && x.name.toLowerCase() !== ex.name.toLowerCase()).slice(0, 4);
+    if (!opts.length) throw Object.assign(new Error('nojson'), { nojson: true });
+    return opts;
+  });
+}
+function swapPanelHtml(sw){
+  return `<div class="swappanel">
+    ${sw.status === 'loading' ? `<div class="thinking" style="padding:0"><span class="spin"></span><span>Finding a swap for ${esc(sw.name)}…</span></div>` : ''}
+    ${sw.status === 'error' ? `<div class="err">${esc(sw.err)}</div>` : ''}
+    ${sw.status === 'done' ? `<div class="subh" style="margin:0">Swap ${esc(sw.name)} for</div><div class="swapopts">${sw.opts.map((o, k) => `<button class="swapopt" data-pick="${k}"><b>${esc(o.name)}</b><small>${o.sets}×${o.reps}${o.why ? ' · ' + esc(o.why) : ''}</small></button>`).join('')}</div>
+      <button class="swaptog ${sw.avoid ? 'on' : ''}" data-avoid>${sw.avoid ? '🚫' : '○'} Never suggest ${esc(sw.name)} again</button>` : ''}
+    ${sw.status !== 'loading' ? `<div class="inline"><div class="field"><label>Tell it why (optional)</label><input data-reason value="${esc(sw.reason || '')}" placeholder="e.g. hurts my shoulder, no cable machine"></div><button class="btn" data-again>${sw.status === 'done' ? 'Others' : 'Retry'}</button></div>` : ''}
+    <button class="link" data-keep style="align-self:flex-start">Keep ${esc(sw.name)}</button>
+  </div>`;
+}
+function wireSwapPanel(body, sw, h){
+  const p = body.querySelector('.swappanel'); if (!p) return;
+  p.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => h.pick(sw.opts[+b.dataset.pick]));
+  p.querySelector('[data-avoid]')?.addEventListener('click', e => { sw.avoid = !sw.avoid; e.currentTarget.classList.toggle('on', sw.avoid); e.currentTarget.textContent = `${sw.avoid ? '🚫' : '○'} Never suggest ${sw.name} again`; });
+  const again = () => { sw.reason = p.querySelector('[data-reason]')?.value.trim() || ''; h.again(); };
+  p.querySelector('[data-again]')?.addEventListener('click', again);
+  p.querySelector('[data-reason]')?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); again(); } });
+  p.querySelector('[data-keep]').onclick = h.keep;
+}
+function runSwap(sw, ctx, onUpdate){
+  sw.status = 'loading'; sw.opts = []; onUpdate();
+  const ctl = new AbortController(); sw.ctl?.abort(); sw.ctl = ctl; sheet.ctl = ctl;
+  swapExerciseAi({ ...ctx, reason: sw.reason }, ctl.signal)
+    .then(opts => { if (sw.ctl !== ctl) return; sw.ctl = null; if (sheet.ctl === ctl) sheet.ctl = null; sw.status = 'done'; sw.opts = opts; onUpdate(); })
+    .catch(e => { if (sw.ctl !== ctl) return; sw.ctl = null; if (sheet.ctl === ctl) sheet.ctl = null; const msg = aiErrText(e); if (!msg) return; sw.status = 'error'; sw.err = msg; onUpdate(); });
+}
+function cancelSwap(sw){ if (!sw) return; sw.ctl?.abort(); if (sw.ctl && sheet.ctl === sw.ctl) sheet.ctl = null; sw.ctl = null; }
+
 function openRoutine(tid){
   const t = tid ? JSON.parse(JSON.stringify(state.gym.templates[tid])) : { id: uid('t_'), name: '', emoji: '🏋️', type: 3, minutes: 45, exercises: [] };
   if (!t.exercises) t.exercises = [];
   sheet.open = true; sheet.kind = 'routine';
+  let body = null, sw = null;
+  const sync = () => { if (!body || !body.isConnected) return; t.emoji = $('#emo', body).value.trim() || '🏋️'; t.name = $('#nm', body).value; t.type = +$('#type', body).value; t.minutes = parseInt($('#mins', body).value) || 0; body.querySelectorAll('[data-en]').forEach(i => t.exercises[+i.dataset.en].name = i.value); body.querySelectorAll('[data-es]').forEach(i => t.exercises[+i.dataset.es].sets = parseInt(i.value) || 0); body.querySelectorAll('[data-er]').forEach(i => t.exercises[+i.dataset.er].reps = parseInt(i.value) || 0); };
+  const update = () => { if (sheet.kind !== 'routine') return; sync(); draw(); };
+  const swapCtx = () => ({ routine: t.name.trim(), exercise: t.exercises[sw.i], others: t.exercises.filter((e, k) => k !== sw.i && e.name.trim()) });
+  const startSwap = i => { sync(); const e = t.exercises[i]; if (!e || !e.name.trim()) return toast('Type an exercise name first.'); cancelSwap(sw); sw = { i, name: e.name.trim(), status: 'loading', opts: [], reason: '', avoid: true }; runSwap(sw, swapCtx(), update); };
   const draw = () => {
-    const body = mountSheet(tid ? 'Edit routine' : 'New routine', `<div class="detail">
+    body = mountSheet(tid ? 'Edit routine' : 'New routine', `<div class="detail">
       <div class="grid2" style="grid-template-columns:72px 1fr"><div class="field"><label>Icon</label><input id="emo" value="${esc(t.emoji)}" maxlength="4" style="text-align:center;font-size:22px"></div><div class="field"><label>Name</label><input id="nm" value="${esc(t.name)}" placeholder="Push day, Legs, Full body…"></div></div>
       <div class="grid2"><div class="field"><label>Calorie estimate as</label><select id="type">${EXERCISES.map((e, i) => `<option value="${i}" ${i === (t.type ?? 3) ? 'selected' : ''}>${e[2]} ${e[0]}</option>`).join('')}</select></div><div class="field"><label>Usual length (min)</label><input id="mins" type="number" inputmode="numeric" value="${t.minutes || ''}" placeholder="45"></div></div>
       <div class="subh">Exercises</div>
       <div style="display:flex;flex-direction:column;gap:6px">
         <div class="exrow"><span class="sets lab" style="display:block;text-align:left">Exercise</span><span class="sets lab" style="display:block">Sets</span><span class="sets lab" style="display:block">Reps</span><span></span></div>
-        ${t.exercises.map((e, i) => `<div class="exrow"><input data-en="${i}" value="${esc(e.name)}" placeholder="Bench press"><input class="c" data-es="${i}" type="number" inputmode="numeric" value="${e.sets || ''}" placeholder="3"><input class="c" data-er="${i}" type="number" inputmode="numeric" value="${e.reps || ''}" placeholder="8"><button class="sets x" data-ex="${i}" aria-label="Remove" style="width:36px;height:36px;border-radius:10px;background:var(--surface2);color:var(--muted)">✕</button></div>`).join('')}
+        ${t.exercises.map((e, i) => `<div class="exrow"><div class="exname"><input data-en="${i}" value="${esc(e.name)}" placeholder="Bench press">${aiAvailable() ? `<button class="swapbtn ${sw && sw.i === i ? 'on' : ''}" data-swap="${i}" aria-label="Swap this exercise with AI" title="Swap with AI">↻</button>` : ''}</div><input class="c" data-es="${i}" type="number" inputmode="numeric" value="${e.sets || ''}" placeholder="3"><input class="c" data-er="${i}" type="number" inputmode="numeric" value="${e.reps || ''}" placeholder="8"><button class="sets x" data-ex="${i}" aria-label="Remove" style="width:36px;height:36px;border-radius:10px;background:var(--surface2);color:var(--muted)">✕</button></div>${sw && sw.i === i ? swapPanelHtml(sw) : ''}`).join('')}
         <button class="link" id="addex">+ Add exercise</button>
+        ${aiAvailable() && t.exercises.length ? `<p class="hint" style="margin:0">Don’t like one? Tap ↻ next to it and AI suggests a swap that works the same muscles.</p>` : ''}
       </div>
       <div style="display:flex;gap:8px">${tid ? '<button class="btn danger" id="del">Delete</button>' : ''}<button class="btn primary" id="save" style="flex:1">Save routine</button></div>
     </div>`);
-    const sync = () => { t.emoji = $('#emo', body).value.trim() || '🏋️'; t.name = $('#nm', body).value; t.type = +$('#type', body).value; t.minutes = parseInt($('#mins', body).value) || 0; body.querySelectorAll('[data-en]').forEach(i => t.exercises[+i.dataset.en].name = i.value); body.querySelectorAll('[data-es]').forEach(i => t.exercises[+i.dataset.es].sets = parseInt(i.value) || 0); body.querySelectorAll('[data-er]').forEach(i => t.exercises[+i.dataset.er].reps = parseInt(i.value) || 0); };
-    $('#addex', body).onclick = () => { sync(); t.exercises.push({ id: uid('e_'), name: '', sets: 3, reps: 10 }); draw(); setTimeout(() => { const last = body.parentNode?.querySelectorAll('[data-en]'); }, 0); const inputs = $('#sheetRoot').querySelectorAll('[data-en]'); inputs[inputs.length - 1]?.focus(); };
-    body.querySelectorAll('[data-ex]').forEach(b => b.onclick = () => { sync(); t.exercises.splice(+b.dataset.ex, 1); draw(); });
-    $('#save', body).onclick = () => { sync(); t.name = t.name.trim(); if (!t.name) return toast('Give the routine a name.'); t.exercises = t.exercises.filter(e => e.name.trim()).map(e => ({ ...e, name: e.name.trim() })); state.gym.templates[t.id] = t; save(); closeSheet(); toast(tid ? 'Routine updated' : 'Routine saved. Now tap the days you do it.'); render(); };
+    $('#addex', body).onclick = () => { sync(); t.exercises.push({ id: uid('e_'), name: '', sets: 3, reps: 10 }); draw(); const inputs = $('#sheetRoot').querySelectorAll('[data-en]'); inputs[inputs.length - 1]?.focus(); };
+    body.querySelectorAll('[data-ex]').forEach(b => b.onclick = () => { sync(); cancelSwap(sw); sw = null; t.exercises.splice(+b.dataset.ex, 1); draw(); });
+    body.querySelectorAll('[data-swap]').forEach(b => b.onclick = () => startSwap(+b.dataset.swap));
+    if (sw) wireSwapPanel(body, sw, {
+      pick: opt => { sync(); const old = t.exercises[sw.i]; if (sw.avoid) setAvoidList([...avoidList(), old.name]); t.exercises[sw.i] = { ...old, name: opt.name, sets: opt.sets, reps: opt.reps }; cancelSwap(sw); sw = null; toast(`Swapped in ${opt.name}`); draw(); },
+      again: () => { sync(); runSwap(sw, swapCtx(), update); },
+      keep: () => { sync(); cancelSwap(sw); sw = null; draw(); }
+    });
+    $('#save', body).onclick = () => { sync(); cancelSwap(sw); t.name = t.name.trim(); if (!t.name) return toast('Give the routine a name.'); t.exercises = t.exercises.filter(e => e.name.trim()).map(e => ({ ...e, name: e.name.trim() })); state.gym.templates[t.id] = t; save(); closeSheet(); toast(tid ? 'Routine updated' : 'Routine saved. Now tap the days you do it.'); render(); };
     $('#del', body)?.addEventListener('click', () => { if (!confirm(`Delete “${t.name}”? Logged workouts keep their sets.`)) return; delete state.gym.templates[t.id]; for (const k of Object.keys(state.gym.plan)) state.gym.plan[k] = (state.gym.plan[k] || []).filter(x => x !== t.id); save(); closeSheet(); render(); });
   };
   draw();
@@ -1547,7 +1626,10 @@ function openAiRoutine(){
   sheet.open = true; sheet.kind = 'airoutine';
   let o = { goal: 'lose fat and keep muscle', days: [1, 3, 5], equip: 'full commercial gym', exp: 'intermediate', mins: 45, notes: '' };
   try { o = { ...o, ...(JSON.parse(localStorage.getItem('hoxfit:airoutine') || '{}')) }; } catch {}
+  let sw = null;
   const draw = (result, err) => {
+    if (!Array.isArray(result)) { cancelSwap(sw); sw = null; }
+    const avoid = avoidList();
     const body = mountSheet('Build a routine', `<div class="detail">
       ${result ? '' : `<div class="grid2">
         <div class="field"><label>Goal</label><select id="goal">${['lose fat and keep muscle','build muscle','general fitness and conditioning','strength (powerlifting style)'].map(g => `<option ${o.goal === g ? 'selected' : ''}>${g}</option>`).join('')}</select></div>
@@ -1559,13 +1641,23 @@ function openAiRoutine(){
         <div class="field"><label>Minutes per session</label><input id="mins" type="number" inputmode="numeric" value="${o.mins}"></div>
       </div>
       <div class="field"><label>Anything else (injuries, favorites, what to avoid)</label><input id="notes" value="${esc(o.notes)}" placeholder="e.g. bad shoulder, love deadlifts"></div>
+      ${avoid.length ? `<div class="field"><label>Never suggested · tap one to allow it again</label><div class="avoidchips">${avoid.map(n => `<button data-unavoid="${esc(n)}">🚫 ${esc(n)}</button>`).join('')}</div></div>` : ''}
       ${err ? `<div class="err">${esc(err)}</div>` : ''}
       <button class="btn primary block" id="gen">✦ Generate my plan</button>`}
       ${result === 'loading' ? `<div class="thinking"><span class="spin"></span><span>Designing your week…</span></div><div class="skel"></div><div class="skel" style="opacity:.6"></div>` : ''}
-      ${Array.isArray(result) ? `<p class="hint" style="margin:0">Here’s the plan. Add it and tweak anything later under My routines.</p>${result.map(r => `<div class="routine" style="border:1px solid var(--line);border-radius:16px;padding:12px"><div class="hd2"><div><b>${esc(r.emoji)} ${esc(r.name)}</b><small>${r.days.map(dw => DOW[dw]).join(', ')} · ~${r.minutes} min</small></div></div><div style="font-size:13px;color:var(--muted)">${r.exercises.map(e => `${esc(e.name)} ${e.sets}×${e.reps}`).join(' · ')}</div></div>`).join('')}
+      ${Array.isArray(result) ? `<p class="hint" style="margin:0">Here’s the plan. Don’t like an exercise? Tap ↻ to swap it. Add it and tweak anything later under My routines.</p>${result.map((r, ri) => `<div class="routine" style="border:1px solid var(--line);border-radius:16px;padding:12px"><div class="hd2"><div><b>${esc(r.emoji)} ${esc(r.name)}</b><small>${r.days.map(dw => DOW[dw]).join(', ')} · ~${r.minutes} min</small></div></div><div style="display:flex;flex-direction:column;gap:2px">${r.exercises.map((e, i) => `<div class="swaprow"><span><b>${esc(e.name)}</b> <small>${e.sets}×${e.reps}</small></span><button class="swapbtn ${sw && sw.r === ri && sw.i === i ? 'on' : ''}" data-swap="${ri}:${i}" aria-label="Swap this exercise with AI" title="Swap with AI">↻</button></div>${sw && sw.r === ri && sw.i === i ? swapPanelHtml(sw) : ''}`).join('')}</div></div>`).join('')}
         <div style="display:flex;gap:8px"><button class="btn ghost" id="redo">Redo</button><button class="btn primary" id="add" style="flex:1">Add to my schedule</button></div>` : ''}
     </div>`);
     body.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { const dw = +b.dataset.d; o.days = o.days.includes(dw) ? o.days.filter(x => x !== dw) : [...o.days, dw]; b.classList.toggle('on'); });
+    body.querySelectorAll('[data-unavoid]').forEach(b => b.onclick = () => { setAvoidList(avoidList().filter(n => n !== b.dataset.unavoid)); toast(`${b.dataset.unavoid} can be suggested again`); draw(result, err); });
+    const swapCtx = () => { const r = result[sw.r]; return { routine: r.name, exercise: r.exercises[sw.i], others: r.exercises.filter((_, k) => k !== sw.i) }; };
+    const update = () => { if (sheet.kind === 'airoutine') draw(result); };
+    body.querySelectorAll('[data-swap]').forEach(b => b.onclick = () => { const [ri, i] = b.dataset.swap.split(':').map(Number); const e = result[ri]?.exercises[i]; if (!e) return; cancelSwap(sw); sw = { r: ri, i, name: e.name, status: 'loading', opts: [], reason: '', avoid: true }; runSwap(sw, swapCtx(), update); });
+    if (sw) wireSwapPanel(body, sw, {
+      pick: opt => { const r = result[sw.r]; const old = r.exercises[sw.i]; if (sw.avoid) setAvoidList([...avoidList(), old.name]); r.exercises[sw.i] = { name: opt.name, sets: opt.sets, reps: opt.reps }; cancelSwap(sw); sw = null; toast(`Swapped in ${opt.name}`); draw(result); },
+      again: () => runSwap(sw, swapCtx(), update),
+      keep: () => { cancelSwap(sw); sw = null; draw(result); }
+    });
     $('#gen', body)?.addEventListener('click', () => { o.goal = $('#goal', body).value; o.exp = $('#exp', body).value; o.equip = $('#equip', body).value; o.mins = parseInt($('#mins', body).value) || 45; o.notes = $('#notes', body).value.trim(); if (!o.days.length) return toast('Pick at least one training day.'); try { localStorage.setItem('hoxfit:airoutine', JSON.stringify(o)); } catch {} run(); });
     $('#redo', body)?.addEventListener('click', () => draw(null));
     $('#add', body)?.addEventListener('click', () => { for (const r of result) { const id = uid('t_'); state.gym.templates[id] = { id, name: r.name, emoji: r.emoji, type: r.type, minutes: r.minutes, exercises: r.exercises.map(e => ({ id: uid('e_'), name: e.name, sets: e.sets, reps: e.reps })) }; for (const dw of r.days) { const arr = state.gym.plan[dw] || []; if (!arr.includes(id)) state.gym.plan[dw] = [...arr, id]; } } save(); closeSheet(); toast(`Added ${result.length} routine${result.length === 1 ? '' : 's'} to your week`); render(); });
@@ -1575,7 +1667,8 @@ function openAiRoutine(){
     const prompt = `You are an experienced strength coach. Design a weekly training plan.
 Client: goal ${o.goal}; experience ${o.exp}; bodyweight ${fmtW(latestWeight())}; equipment: ${o.equip}; ${o.days.length} sessions per week on these days (0=Sunday..6=Saturday): [${o.days.join(', ')}]; about ${o.mins} minutes per session; notes: ${o.notes || 'none'}.
 Reply ONLY with JSON: {"routines":[{"name":"Upper body","emoji":"🏋️","days":[1,4],"minutes":45,"type":3,"exercises":[{"name":"Barbell bench press","sets":4,"reps":8}]}]}
-Rules: cover every listed day exactly once (a routine may repeat on several days); 4-7 exercises per session sized to the minutes; compound lifts first; use plain gym names; "reps" is one integer (the bottom of the range); "type" is the calorie-estimate category index: ${EXERCISES.map((e, i) => `${i}=${e[0]}`).join(', ')} (use 3 for lifting, 4 for circuits/HIIT); one emoji per routine; give routines short distinct names.`;
+Rules: cover every listed day exactly once (a routine may repeat on several days); 4-7 exercises per session sized to the minutes; compound lifts first; use plain gym names; "reps" is one integer (the bottom of the range); "type" is the calorie-estimate category index: ${EXERCISES.map((e, i) => `${i}=${e[0]}`).join(', ')} (use 3 for lifting, 4 for circuits/HIIT); one emoji per routine; give routines short distinct names.${avoidList().length ? `
+Never include these exercises (the client dislikes them): ${avoidList().join('; ')}.` : ''}`;
     aiJson(prompt, null, ctl.signal).then(res => { if (sheet.ctl !== ctl) return; sheet.ctl = null;
       const routines = (Array.isArray(res?.routines) ? res.routines : []).map(r => ({ name: String(r.name || 'Workout').slice(0, 40), emoji: firstEmoji(r.emoji || '🏋️'), days: (Array.isArray(r.days) ? r.days : []).map(Number).filter(x => x >= 0 && x <= 6 && o.days.includes(x)), minutes: parseInt(r.minutes) || o.mins, type: Number.isInteger(r.type) && EXERCISES[r.type] ? r.type : 3, exercises: (Array.isArray(r.exercises) ? r.exercises : []).filter(e => e && e.name).map(e => ({ name: String(e.name).slice(0, 50), sets: parseInt(e.sets) || 3, reps: parseInt(e.reps) || 8 })) })).filter(r => r.exercises.length);
       if (!routines.length) return draw(null, 'The plan came back empty. Try again.');

@@ -7,6 +7,7 @@ A personal calorie, macro and weight tracker. One HTML file, no build step, no s
 - **A plan built from your numbers**: BMR and maintenance from the Mifflin-St Jeor formula, a deficit for the pace you pick, macro targets.
 - **Weight trend**: daily weigh-ins, 7-day average, goal line, pace, projected goal date.
 - **Optional AI assist**: with your own Anthropic API key, type a whole meal or photograph a nutrition label and have it read into numbers.
+- **Swap exercises you don't like**: tap ↻ next to any exercise in a routine and AI suggests three replacements that work the same muscles; exercises you swap out are never suggested again unless you say so.
 
 ## Run it
 
